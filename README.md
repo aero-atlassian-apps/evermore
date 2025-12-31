@@ -1,5 +1,7 @@
 # Evermore (formerly Recall)
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](file:///d:/rouca/DVM/workPlace/evermore/LICENSE)
+
 **Evermore** is a voice-first, AI-agentic application designed to preserve family stories. It allows "Seniors" (Storytellers) to record memories via natural conversation with an empathetic AI, and "Family Members" to curate and cherish these stories.
 
 ## Core Features
@@ -32,15 +34,24 @@
 2.  **Environment Setup**:
     Copy `docs/env-template.txt` to `.env.local` and fill in the required API keys.
 
-3.  **Run Development Server**:
+3.  **Database Setup**:
+    ```bash
+    npm run migrate
+    ```
+
+4.  **Run Development Server**:
     ```bash
     npm run dev
     ```
 
-4.  **Open Application**:
+5.  **Open Application**:
     Navigate to [http://localhost:3000](http://localhost:3000).
 
 ## Documentation
 
 *   See `docs/PRODUCT` for product requirements and user stories.
 *   See `docs/ARCHITECTURE` for system design and agentic flow.
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](file:///d:/rouca/DVM/workPlace/evermore/LICENSE) file for details.
