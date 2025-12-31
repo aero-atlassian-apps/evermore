@@ -2,56 +2,125 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](file:///d:/rouca/DVM/workPlace/evermore/LICENSE)
 
+**Every senior can preserve and share their life story, creating a lasting legacy for generations to come.**
+
 **Evermore** is a voice-first, AI-agentic application designed to preserve family stories. It allows "Seniors" (Storytellers) to record memories via natural conversation with an empathetic AI, and "Family Members" to curate and cherish these stories.
 
-## Core Features
+---
 
-### For Storytellers (Seniors)
-*   **Voice-First Interface**: Natural conversation with an AI host that listens, understands, and asks follow-up questions.
-*   **Story Immersion**: Listen to your recorded stories with generated audio, view transcripts, and relive memories.
-*   **Favorites**: Mark your most cherished stories for easy access.
-*   **Delete**: Remove stories you no longer wish to keep.
-*   **Profile**: Manage your personal details and "Voiceprint".
+## 🧠 Agentic AI Architecture: The Evermore Brain
 
-### For Family Members
-*   **Family Portal**: View recent updates from your loved ones.
-*   **Storybook Creation**: Select stories to export as a beautifully formatted PDF storybook.
+Evermore's "intelligence" is a multi-layered cognitive architecture designed for safety, emotional resonance, and long-term memory.
 
-## Technology Stack
+- **FSM (Agent State Machine)**: The "Nervous System" that maintains conversation flow and state guardrails.
+- **ReAct Loop (Reason + Act)**: The "Frontal Lobe" that thinks before speaking, deciding when to query memories or save details.
+- **RAG (Semantic Episodic Memory)**: The "Hippocampus" using Pinecone vector embeddings to remember details from past conversations.
+- **AoT (Atom of Thought)**: The "Creative Cortex" that decomposes complex tasks like storybook generation into verifiable sub-tasks.
 
-*   **Frontend**: Next.js 14 (App Router), Tailwind CSS, Framer Motion.
-*   **Backend**: Next.js API Routes, Drizzle ORM, PostgreSQL.
-*   **AI/Agentic**: Custom "Evermore" Agent (built on Google Gemini/Vertex AI), Deepgram (STT), ElevenLabs (TTS).
-*   **Vector DB**: Pinecone (for memory recall and context).
+---
 
-## Getting Started
+## 🛠 Tech Stack
 
-1.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
+### Core Framework
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript 5.x
+- **Styling**: TailwindCSS + Framer Motion (Animations)
+- **State Management**: Zustand
 
-2.  **Environment Setup**:
-    Copy `docs/env-template.txt` to `.env.local` and fill in the required API keys.
+### AI & ML
+- **LLM**: Google Gemini 1.5 Pro (Vertex AI)
+- **Image Gen**: Google Imagen 2 (Vertex AI)
+- **Vector Store**: Pinecone (Serverless)
+- **Speech-to-Text**: Google Cloud Speech / OpenAI Whisper
+- **Text-to-Speech**: ElevenLabs (Latency optimized)
 
-3.  **Database Setup**:
-    ```bash
-    npm run migrate
-    ```
+### Backend & Infrastructure
+- **Database**: PostgreSQL (CockroachDB Serverless)
+- **ORM**: Drizzle ORM
+- **Caching**: Redis (Upstash) for session state and rate limiting
+- **Deployment**: Vercel (Production) / Docker (Staging)
 
-4.  **Run Development Server**:
-    ```bash
-    npm run dev
-    ```
+---
 
-5.  **Open Application**:
-    Navigate to [http://localhost:3000](http://localhost:3000).
+## 🚀 Getting Started
 
-## Documentation
+### 1. Prerequisites
+- Node.js 18+
+- Docker Desktop (for local DB/Redis)
 
-*   See `docs/PRODUCT` for product requirements and user stories.
-*   See `docs/ARCHITECTURE` for system design and agentic flow.
+### 2. Setup
+```bash
+# Clone the repository
+git clone https://github.com/your-org/evermore.git
+cd evermore
 
-## License
+# Install dependencies
+npm install
+
+# Environment setup
+cp docs/env-template.txt .env.local
+# Fill in your API keys in .env.local
+```
+
+### 3. Database & Infrastructure
+Start the local database and redis containers:
+```bash
+docker compose up -d
+```
+Push the schema to your local database:
+```bash
+npm run db:push
+```
+
+### 4. Running Development
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 📊 Database Management
+
+| Command | Description |
+|---------|-------------|
+| `npm run db:push` | Syncs schema with database (safe for development). |
+| `npm run db:studio` | Opens Drizzle Studio (web UI) to browse data. |
+| `npm run seed` | Populates local DB with sample stories (wipes existing data). |
+| `npm run db:generate` | Generates SQL migrations for production. |
+
+---
+
+## 🧪 Testing
+
+### Unit & Integration (Vitest)
+```bash
+npm run test           # Run all tests
+npm run test:unit      # Run unit tests
+npm run test:coverage  # Run coverage report
+```
+
+### End-to-End (Playwright)
+```bash
+npx playwright install # Install browsers first time
+npm run test:e2e       # Run E2E tests
+```
+
+---
+
+## 🚢 Deployment & Staging
+
+### Docker Staging
+To run a production-like environment locally:
+```bash
+docker compose -f docker-compose.staging.yml up --build -d
+```
+
+### Production
+Deployment is optimized for **Vercel**. Ensure all environment variables from `.env.example` are configured in the Vercel dashboard.
+
+---
+
+## 📄 License
 
 This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](file:///d:/rouca/DVM/workPlace/evermore/LICENSE) file for details.
