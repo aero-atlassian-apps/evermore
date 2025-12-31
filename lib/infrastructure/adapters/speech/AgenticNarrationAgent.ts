@@ -215,14 +215,10 @@ export class AgenticNarrationAgent {
             voiceStyle = (emotionResult.data as any)?.voiceStyle || 'warm-storytelling';
         }
 
-        // Apply Gender Bias to Voice Style if neutral
-        if (options?.context?.gender === 'female' && voiceStyle === 'warm-storytelling') {
-            // For now, map to a female equivalent if available, or rely on selectVoice mapping
-            // 'gentle-reflective' is Bella (female).
-            // 'warm-storytelling' is Adam (male).
-            // Let's implement simple bias:
-            if (voiceStyle === 'warm-storytelling') voiceStyle = 'gentle-reflective';
-        }
+        // Gender bias logic removed to ensure consistent use of high-quality 'Adam' voice for now.
+        // if (options?.context?.gender === 'female' && voiceStyle === 'warm-storytelling') {
+        //     if (voiceStyle === 'warm-storytelling') voiceStyle = 'gentle-reflective';
+        // }
 
         console.log(`   ✓ Prepared: ${wordCount} words, emotion: ${emotion}, style: ${voiceStyle}`);
 

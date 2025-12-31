@@ -36,9 +36,9 @@ Go to **Settings > Environment Variables** and add:
 ### Application
 - `NODE_ENV`: `production`
 - `NEXTAUTH_URL`: `https://your-app.vercel.app`
-- `NEXTAUTH_SECRET`: (Random string)
-- `JWT_SECRET`: (Random string)
-- `CRON_SECRET`: (Random string for cron auth)
+- `NEXTAUTH_SECRET`: `c66556304802e767a7e8ad2963296bb8d4b`
+- `JWT_SECRET`: `c66556304802e767a7e8ad2963296bb8d4b`
+- `CRON_SECRET`: `e81c084dc7dced`
 
 ### Database
 - `DATABASE_URL`: `postgresql://user:pass@host:port/db?sslmode=require`

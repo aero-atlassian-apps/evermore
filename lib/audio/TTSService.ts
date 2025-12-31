@@ -100,6 +100,7 @@ export class ServerTTSService implements TTSService {
 export function createTTSService(): TTSService {
     // Check if we're in a browser environment
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { WebSpeechTTS } = require('./WebSpeechTTS');
         return new WebSpeechTTS();
     }

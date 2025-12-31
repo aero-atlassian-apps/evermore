@@ -34,106 +34,119 @@ export function ImmersiveViewer({ scenes, title, onExit, startPage = 0 }: Immers
 
     const currentScene = scenes[currentPage];
 
+    // Audio refs
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Enter fullscreen
     useEffect(() => {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-            synthRef.current = window.speechSynthesis;
+        if (typeof window !== 'undefined') {
+            // Load voices for fallback
+            if ('speechSynthesis' in window) {
+                synthRef.current = window.speechSynthesis;
+                const loadVoices = () => {
+                    const availableVoices = window.speechSynthesis.getVoices();
+                    if (availableVoices.length > 0) setVoices(availableVoices);
+                };
+                loadVoices();
+                window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+            }
 
-            // Load voices - may need to wait for voiceschanged event
-            const loadVoices = () => {
-                const availableVoices = window.speechSynthesis.getVoices();
-                if (availableVoices.length > 0) {
-                    setVoices(availableVoices);
-                }
-            };
-
-            loadVoices();
-            window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-
-            // Enter fullscreen
             document.documentElement.requestFullscreen?.().catch(() => { });
 
             return () => {
                 synthRef.current?.cancel();
-                window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                    audioRef.current = null;
+                }
                 document.exitFullscreen?.().catch(() => { });
             };
         }
     }, []);
 
-    const speakPage = useCallback((pageIndex: number) => {
+    // Helper: Browser TTS Fallback
+    const fallbackToBrowserTTS = useCallback((text: string, pageIndex: number) => {
         if (!synthRef.current) return;
 
+        console.log('[ImmersiveViewer] Using Browser TTS fallback');
         synthRef.current.cancel();
-        const scene = scenes[pageIndex];
-        if (!scene) return;
 
-        const utterance = new SpeechSynthesisUtterance(scene.text);
+        const utterance = new SpeechSynthesisUtterance(text);
         utteranceRef.current = utterance;
 
-        // Use pre-loaded voices (with fallback to getVoices for safety)
         const availableVoices = voices.length > 0 ? voices : synthRef.current.getVoices();
         const friendlyVoice = availableVoices.find(v =>
             v.lang.startsWith('en') && (
                 v.name.includes('Google') ||
                 v.name.includes('Microsoft') ||
-                v.name.includes('Samantha') ||
-                v.name.includes('Karen')
+                v.name.includes('Samantha')
             )
         ) || availableVoices.find(v => v.lang.startsWith('en'));
 
         if (friendlyVoice) utterance.voice = friendlyVoice;
-        utterance.rate = 0.85;
-        utterance.pitch = 1.0;
-
-        utterance.onstart = () => {
-            console.log('[ImmersiveViewer] Speech started for page', pageIndex);
-        };
+        utterance.rate = 0.9;
 
         utterance.onend = () => {
-            // Auto-advance to next page
             if (pageIndex < scenes.length - 1 && !isPaused) {
-                setTimeout(() => {
-                    setCurrentPage(p => p + 1);
-                }, 1500); // Brief pause between pages
+                setTimeout(() => setCurrentPage(p => p + 1), 1000);
             } else if (pageIndex >= scenes.length - 1) {
                 setIsPlaying(false);
             }
         };
 
-        utterance.onerror = (e) => {
-            // Ignore interruption/cancellation errors as they are expected during cleanup/navigation
-            if (e.error === 'interrupted' || e.error === 'canceled') {
-                console.log('[ImmersiveViewer] Speech interrupted (normal cleanup)');
-                return;
-            }
-            console.error('[ImmersiveViewer] Speech error:', e.error, e);
-            setIsPlaying(false);
-        };
-
-        // Prevent double-speaking the same page
-        if (lastSpokenPageRef.current === pageIndex && synthRef.current.speaking) {
-            console.log('[ImmersiveViewer] Already speaking page', pageIndex);
-            return;
-        }
-
-        lastSpokenPageRef.current = pageIndex;
-        console.log('[ImmersiveViewer] Calling speak() for page', pageIndex);
-
-        // Cancel any previous speech
-        synthRef.current.cancel();
-
+        utterance.onerror = () => setIsPlaying(false);
         synthRef.current.speak(utterance);
     }, [scenes, isPaused, voices]);
 
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (synthRef.current) {
-                console.log('[ImmersiveViewer] Unmounting, cancelling speech');
-                synthRef.current.cancel();
-            }
-        };
-    }, []);
+    const speakPage = useCallback(async (pageIndex: number) => {
+        // cleanup previous audio
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+        if (synthRef.current) synthRef.current.cancel();
+
+        const scene = scenes[pageIndex];
+        if (!scene) return;
+
+        console.log('[ImmersiveViewer] Fetching premium audio for page', pageIndex);
+
+        try {
+            // Try Server TTS (ElevenLabs)
+            const response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: scene.text })
+            });
+
+            if (!response.ok) throw new Error('TTS API failed');
+
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            const audio = new Audio(audioUrl);
+            audioRef.current = audio;
+
+            audio.onended = () => {
+                if (pageIndex < scenes.length - 1 && !isPaused) {
+                    setTimeout(() => setCurrentPage(p => p + 1), 1000);
+                } else if (pageIndex >= scenes.length - 1) {
+                    setIsPlaying(false);
+                }
+            };
+
+            audio.onerror = () => {
+                console.warn('[ImmersiveViewer] Audio playback failed, falling back');
+                fallbackToBrowserTTS(scene.text, pageIndex);
+            };
+
+            await audio.play();
+
+        } catch (err) {
+            console.warn('[ImmersiveViewer] Premium TTS failed, using fallback:', err);
+            fallbackToBrowserTTS(scene.text, pageIndex);
+        }
+    }, [scenes, isPaused, fallbackToBrowserTTS]);
 
     // Auto-play when page changes and we are "playing"
     useEffect(() => {
@@ -149,7 +162,15 @@ export function ImmersiveViewer({ scenes, title, onExit, startPage = 0 }: Immers
     };
 
     const handlePause = () => {
-        if (synthRef.current) {
+        if (audioRef.current) {
+            if (isPaused) {
+                audioRef.current.play();
+                setIsPaused(false);
+            } else {
+                audioRef.current.pause();
+                setIsPaused(true);
+            }
+        } else if (synthRef.current) {
             if (isPaused) {
                 synthRef.current.resume();
                 setIsPaused(false);
@@ -161,6 +182,10 @@ export function ImmersiveViewer({ scenes, title, onExit, startPage = 0 }: Immers
     };
 
     const handleStop = () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
         synthRef.current?.cancel();
         setIsPlaying(false);
         setIsPaused(false);
@@ -168,7 +193,13 @@ export function ImmersiveViewer({ scenes, title, onExit, startPage = 0 }: Immers
 
     const goToPage = (page: number) => {
         if (page < 0 || page >= scenes.length) return;
+
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
         synthRef.current?.cancel();
+
         setCurrentPage(page);
         if (isPlaying && !isPaused) {
             speakPage(page);

@@ -122,7 +122,7 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
     }, [text, onPlayingChange, cleanup]);
 
     // Fallback to Web Speech API
-    const useBrowserTTS = useCallback(() => {
+    const triggerBrowserTTS = useCallback(() => {
         console.log('[AudioPlayer] Attempting browser TTS fallback');
 
         // Ensure speech synthesis is available
@@ -201,7 +201,7 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
         return true;
     }, [text, onPlayingChange]);
 
-    const handlePlay = async () => {
+    const handlePlay = useCallback(async () => {
         if (isPlaying) return;
 
         cleanup();
@@ -214,22 +214,29 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
 
             if (!serverSuccess) {
                 // Gracefully fall back to Web Speech
-                useBrowserTTS();
+                triggerBrowserTTS();
             }
         } catch (err) {
             // If anything fails, always try browser TTS
             console.warn('[AudioPlayer] Error in TTS flow, using browser fallback:', err);
-            useBrowserTTS();
+            triggerBrowserTTS();
         }
 
         setIsLoading(false);
-    };
+    }, [isPlaying, cleanup, tryServerTTS, triggerBrowserTTS]);
 
     useEffect(() => {
-        if (autoPlay && text) {
+        let mounted = true;
+
+        if (autoPlay && text && !isPlaying && !isLoading && mounted) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             handlePlay();
         }
-    }, [autoPlay, text]);
+
+        return () => {
+            mounted = false;
+        };
+    }, [autoPlay, text, isPlaying, isLoading, handlePlay]);
 
     const handlePause = () => {
         if (audioRef.current) {

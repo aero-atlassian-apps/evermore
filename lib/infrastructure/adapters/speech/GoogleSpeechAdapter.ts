@@ -23,8 +23,12 @@ export class GoogleSpeechAdapter implements SpeechPort {
         }
 
         const { GoogleAuth } = await import('google-auth-library');
+        const { getGoogleCredentials } = await import('../../../setup-auth');
+
+        const credentials = getGoogleCredentials();
         const auth = new GoogleAuth({
             scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            credentials: credentials || undefined
         });
 
         const client = await auth.getClient();
@@ -79,9 +83,12 @@ export class GoogleSpeechAdapter implements SpeechPort {
     private async speechToTextREST(audioBuffer: Buffer, contentType: string): Promise<SpeechToTextResult> {
         // Use Google Cloud Speech-to-Text REST API directly
         const { GoogleAuth } = await import('google-auth-library');
+        const { getGoogleCredentials } = await import('../../../setup-auth');
 
+        const credentials = getGoogleCredentials();
         const auth = new GoogleAuth({
             scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            credentials: credentials || undefined
         });
 
         const client = await auth.getClient();

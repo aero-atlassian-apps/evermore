@@ -1,6 +1,7 @@
 import { AIServicePort } from '../../../core/application/ports/AIServicePort';
 import { VertexAI, GenerativeModel, Part } from '@google-cloud/vertexai';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+import { getGoogleCredentials } from '../../../setup-auth';
 
 export class GeminiService implements AIServicePort {
   private vertexAI: VertexAI;
@@ -12,10 +13,9 @@ export class GeminiService implements AIServicePort {
     const project = process.env.GOOGLE_CLOUD_PROJECT || 'recall-hackathon';
     const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
 
-    // Support for Vercel: Inject credentials directly from JSON string if available
-    const googleAuthOptions = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-      ? { credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) }
-      : undefined;
+    // Use shared credential helper
+    const credentials = getGoogleCredentials();
+    const googleAuthOptions = credentials ? { credentials } : undefined;
 
     this.vertexAI = new VertexAI({
       project,

@@ -13,14 +13,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: recall_app
+    container_name: evermore_app
     restart: unless-stopped
     env_file:
       - .env.local
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/recall_mvp
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/evermore_mvp
       - USE_MOCKS=false
       - NEXT_PUBLIC_USE_MOCKS=false
       - NODE_ENV=development
@@ -61,7 +61,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - recall_network
+      - evermore_network
     # Auto migrate + seed + start dev server
     command: >
       sh -c "
@@ -69,25 +69,25 @@ services:
         npm run db:push &&
         echo '🌱 Seeding database...' &&
         npm run seed || true &&
-        echo '✅ Starting Recall MVP...' &&
+        echo '✅ Starting Evermore MVP...' &&
         npm run dev
       "
 
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
-    container_name: recall_db
+    container_name: evermore_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: recall_mvp
+      POSTGRES_DB: evermore_mvp
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
-      - recall_network
+      - evermore_network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
@@ -97,40 +97,40 @@ services:
   # pgAdmin - Database UI (Optional but included)
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: recall_pgadmin
+    container_name: evermore_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@recall.dev
+      PGADMIN_DEFAULT_EMAIL: admin@evermore.dev
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"
     networks:
-      - recall_network
+      - evermore_network
     depends_on:
       - db
 
   # MailHog - Email Testing UI
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: recall_mailhog
+    container_name: evermore_mailhog
     ports:
       - "1025:1025" # SMTP server
       - "8025:8025" # Web UI
     networks:
-      - recall_network
+      - evermore_network
 
   # Redis - Session State & Caching
   redis:
     image: redis:7-alpine
-    container_name: recall_redis
+    container_name: evermore_redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
-      - recall_network
+      - evermore_network
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -139,7 +139,7 @@ services:
     command: redis-server --appendonly yes
 
 networks:
-  recall_network:
+  evermore_network:
     driver: bridge
 
 volumes:

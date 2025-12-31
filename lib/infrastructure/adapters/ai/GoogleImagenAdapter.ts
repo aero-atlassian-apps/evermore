@@ -58,14 +58,11 @@ export class GoogleImagenAdapter implements ImageGenerationPort {
                 apiEndpoint: `${this.location}-aiplatform.googleapis.com`,
             };
 
-            // Support Base64 credentials (for Vercel/serverless deployments)
-            if (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64 && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-                try {
-                    const credsJson = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf-8');
-                    clientOptions.credentials = JSON.parse(credsJson);
-                } catch (e) {
-                    console.warn('[GoogleImagenAdapter] Failed to parse GOOGLE_APPLICATION_CREDENTIALS_BASE64');
-                }
+            // Support Base64 credentials via shared helper
+            const { getGoogleCredentials } = await import('../../../setup-auth');
+            const credentials = getGoogleCredentials();
+            if (credentials) {
+                clientOptions.credentials = credentials;
             }
 
             const client = new PredictionServiceClient(clientOptions);

@@ -9,6 +9,7 @@
 // Check if Supabase client package is available
 let createClient: any;
 try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     createClient = require('@supabase/supabase-js').createClient;
 } catch {
     createClient = null;

@@ -19,12 +19,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: recall_app
+    container_name: evermore_app
     restart: always
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/recall_mvp
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/evermore_mvp
       # SECURITY: Mocks MUST be disabled in production
       - USE_MOCKS=false
       - NODE_ENV=production
@@ -43,7 +43,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - recall_network
+      - evermore_network
     command: >
       sh -c "
         npm run migrate &&
@@ -53,18 +53,18 @@ services:
 
   db:
     image: postgres:15-alpine
-    container_name: recall_db
+    container_name: evermore_db
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: recall_mvp
+      POSTGRES_DB: evermore_mvp
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
-      - recall_network
+      - evermore_network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
@@ -72,7 +72,7 @@ services:
       retries: 5
 
 networks:
-  recall_network:
+  evermore_network:
     driver: bridge
 
 volumes:

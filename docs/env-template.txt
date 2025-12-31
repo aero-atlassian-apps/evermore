@@ -1,5 +1,5 @@
 # ============================================================
-# RECALL MVP - Environment Configuration Template
+# Evermore MVP - Environment Configuration Template
 # ============================================================
 # Copy this content to .env.local in the project root
 # ============================================================

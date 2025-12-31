@@ -1,5 +1,6 @@
 import { EmbeddingPort } from '../../../core/application/ports/EmbeddingPort';
 import { GoogleAuth } from 'google-auth-library';
+import { getGoogleCredentials } from '../../../setup-auth';
 
 /**
  * Adapter for Google Vertex AI Embeddings.
@@ -18,8 +19,11 @@ export class GoogleEmbeddingAdapter implements EmbeddingPort {
         this.projectId = projectId;
         this.location = location;
         this.endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${this.modelId}:predict`;
+
+        const credentials = getGoogleCredentials();
         this.auth = new GoogleAuth({
             scopes: 'https://www.googleapis.com/auth/cloud-platform',
+            credentials: credentials || undefined
         });
     }
 

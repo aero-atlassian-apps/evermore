@@ -7,17 +7,15 @@
 
 import { NextResponse } from 'next/server';
 import { llmProvider } from '@/lib/infrastructure/di/container';
+import { getGoogleCredentials } from '@/lib/setup-auth';
 
 export async function GET() {
     try {
         // Check if we have Google Cloud credentials configured
-        const hasCredentials = !!(
-            process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-            process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64
-        );
+        const credentials = getGoogleCredentials();
         const hasProject = !!process.env.GOOGLE_CLOUD_PROJECT;
 
-        if (!hasCredentials || !hasProject) {
+        if (!credentials || !hasProject) {
             return NextResponse.json({
                 available: false,
                 reason: 'not_configured',

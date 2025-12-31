@@ -22,6 +22,13 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+  // Prevent native module crashes by externalizing heavy backend packages
+  serverExternalPackages: [
+    '@google-cloud/vertexai',
+    '@google-cloud/aiplatform',
+    'google-auth-library',
+    '@pinecone-database/pinecone',
+  ],
   async headers() {
     return [
       {

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AppShell } from '@/components/layout/AppShell';
 
 interface Chapter {
    id: string;
@@ -173,35 +172,30 @@ export default function FamilyPortalPage() {
 
    if (loading) {
       return (
-         <AppShell userType="family" showNav={true}>
-            <div className="flex items-center justify-center min-h-[50vh]">
-               <div className="text-center">
-                  <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-text-secondary-light">Loading family portal...</p>
-               </div>
+         <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="text-center">
+               <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+               <p className="text-text-secondary-light">Loading family portal...</p>
             </div>
-         </AppShell>
+         </div>
       );
    }
 
    if (error) {
       return (
-         <AppShell userType="family" showNav={true}>
-            <div className="flex items-center justify-center min-h-[50vh]">
-               <div className="text-center">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4">
-                     <span className="material-symbols-outlined text-3xl">error</span>
-                  </div>
-                  <p className="text-text-secondary-light">{error}</p>
+         <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="text-center">
+               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4">
+                  <span className="material-symbols-outlined text-3xl">error</span>
                </div>
+               <p className="text-text-secondary-light">{error}</p>
             </div>
-         </AppShell>
+         </div>
       );
    }
 
    return (
-      <AppShell userType="family" showNav={true}>
-
+      <>
          {/* Hero Section: Warm & Illustrative */}
          <div className="relative w-full rounded-[3rem] overflow-hidden mb-16 bg-[#F3E5D8]/40 border border-[#E8D4C0] animate-fade-in shadow-inner-soft">
             <div className="relative z-10 px-8 py-16 md:px-20 flex flex-col md:flex-row justify-between items-center gap-10">
@@ -416,6 +410,6 @@ export default function FamilyPortalPage() {
                </div>
             </div>
          )}
-      </AppShell>
+      </>
    );
 }

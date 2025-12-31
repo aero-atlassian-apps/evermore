@@ -1,6 +1,7 @@
 import { LLMPort } from '../../../core/application/ports/LLMPort';
 import { VertexAI, GenerativeModel, Part } from '@google-cloud/vertexai';
 import { JsonParser } from '../../../core/application/utils/JsonParser';
+import { getGoogleCredentials } from '../../../setup-auth';
 
 /**
  * GoogleVertexAdapter - Production-grade Vertex AI client.
@@ -26,7 +27,12 @@ export class GoogleVertexAdapter implements LLMPort {
             throw new Error('GoogleVertexAdapter: GOOGLE_CLOUD_PROJECT is required');
         }
 
-        this.vertexAI = new VertexAI({ project, location });
+        const credentials = getGoogleCredentials();
+        this.vertexAI = new VertexAI({
+            project,
+            location,
+            googleAuthOptions: credentials ? { credentials } : undefined
+        });
 
         this.model = this.vertexAI.getGenerativeModel({
             model: 'gemini-2.0-flash-001',

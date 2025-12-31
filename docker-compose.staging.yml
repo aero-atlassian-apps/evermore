@@ -22,8 +22,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: recall-staging:latest
-    container_name: recall_staging
+    image: evermore-staging:latest
+    container_name: evermore_staging
     restart: unless-stopped
     env_file:
       - .env.staging
@@ -41,18 +41,18 @@ services:
     depends_on:
       - mailhog
     networks:
-      - recall_staging_network
+      - evermore_staging_network
 
   # MailHog - Email Testing (Staging Only)
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: recall_staging_mailhog
+    container_name: evermore_staging_mailhog
     ports:
       - "1025:1025" # SMTP server
       - "8025:8025" # Web UI at http://localhost:8025
     networks:
-      - recall_staging_network
+      - evermore_staging_network
 
 networks:
-  recall_staging_network:
+  evermore_staging_network:
     driver: bridge
