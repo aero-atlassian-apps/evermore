@@ -25,6 +25,13 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.pfx
+*.crt
+*.db
+*.sqlite
+*.log
+dev_server.log
 
 # debug
 npm-debug.log*
@@ -36,6 +43,7 @@ yarn-error.log*
 # env files (except .env.example which is a template)
 .env*
 !.env.example
+.env*.local
 
 # vercel
 .vercel
@@ -43,5 +51,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-dev_server.log
-node_modules/
+
+# editors
+.vscode/
+.idea/
+*.swp
+*.swo
