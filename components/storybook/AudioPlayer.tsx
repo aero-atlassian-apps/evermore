@@ -20,6 +20,7 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
     const [isLoading, setIsLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [usingFallback, setUsingFallback] = useState(false);
+    const [volume, setVolume] = useState(1.0);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const synthRef = useRef<SpeechSynthesis | null>(null);
@@ -84,6 +85,7 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
             audioUrlRef.current = audioUrl;
 
             const audio = new Audio(audioUrl);
+            audio.volume = volume;
             audioRef.current = audio;
 
             return new Promise((resolve) => {
@@ -159,6 +161,7 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
         // Slower, warmer pace for storytelling
         utterance.rate = 0.9;
         utterance.pitch = 1.0;
+        utterance.volume = volume;
 
         utterance.onstart = () => {
             console.log('[AudioPlayer] Browser TTS started speaking');
@@ -319,6 +322,37 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
                     <span className="material-symbols-outlined text-lg">stop</span>
                 </button>
             )}
+
+            {/* Volume Control (Compact) */}
+            <div className={`flex items-center gap-1 transition-all duration-300 ${isPlaying ? 'w-24 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
+                <button
+                    onClick={() => setVolume(v => v === 0 ? 1 : 0)}
+                    className="text-amber-700/70 hover:text-amber-700"
+                >
+                    <span className="material-symbols-outlined text-lg">
+                        {volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
+                    </span>
+                </button>
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={volume}
+                    onChange={(e) => {
+                        const newVol = parseFloat(e.target.value);
+                        setVolume(newVol);
+                        if (audioRef.current) audioRef.current.volume = newVol;
+                        if (synthRef.current && isPlaying) {
+                            // Resume/Restart might be needed for SpeechSynthesis volume to update in some browsers, 
+                            // but usually next utterance picks it up. 
+                            // For currently playing utterance, it's tricky.
+                            // We heavily rely on ref update for next play.
+                        }
+                    }}
+                    className="w-16 h-1 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                />
+            </div>
 
             {/* Listen Label - subtle quality indicator */}
             {!isPlaying && progress === 0 && !isLoading && (

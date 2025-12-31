@@ -124,8 +124,8 @@ export function ChapterAudioPlayer({
                     onClick={onRequestGenerate}
                     disabled={isGenerating}
                     className={`px-6 py-3 rounded-full font-semibold transition-all ${isGenerating
-                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-terracotta to-amber-600 text-white hover:shadow-lg'
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-terracotta to-amber-600 text-white hover:shadow-lg'
                         }`}
                 >
                     {isGenerating ? (
@@ -224,9 +224,23 @@ export function ChapterAudioPlayer({
 
             {/* Volume Control */}
             <div className="flex items-center gap-3 mt-4 px-4">
-                <span className="material-symbols-outlined text-slate-400 text-sm">
-                    {volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
-                </span>
+                <button
+                    onClick={() => {
+                        if (volume > 0) {
+                            setVolume(0);
+                            if (audioRef.current) audioRef.current.volume = 0;
+                        } else {
+                            setVolume(0.8);
+                            if (audioRef.current) audioRef.current.volume = 0.8;
+                        }
+                    }}
+                    className="hover:text-terracotta transition-colors focus:outline-none"
+                    aria-label={volume === 0 ? "Unmute" : "Mute"}
+                >
+                    <span className="material-symbols-outlined text-slate-400 text-sm">
+                        {volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
+                    </span>
+                </button>
                 <input
                     type="range"
                     min="0"
