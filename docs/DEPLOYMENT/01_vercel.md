@@ -23,7 +23,7 @@ We use a minimal configuration. Environment variables are managed in the Dashboa
         }
     ],
     "framework": "nextjs",
-    "buildCommand": "npm run build",
+    "buildCommand": "npm run vercel-build",
     "outputDirectory": ".next"
 }
 ```
