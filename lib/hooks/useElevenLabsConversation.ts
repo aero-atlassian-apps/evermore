@@ -64,31 +64,39 @@ export function useElevenLabsConversation(options: UseElevenLabsConversationOpti
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         }
 
-        try {
-            const binaryString = atob(base64Audio);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+        return new Promise<void>((resolve) => {
+            try {
+                const binaryString = atob(base64Audio);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                // Decode audio data (assuming PCM 16-bit mono)
+                const audioBuffer = audioContextRef.current!.createBuffer(1, bytes.length / 2, 16000);
+                const channelData = audioBuffer.getChannelData(0);
+                const dataView = new DataView(bytes.buffer);
+
+                for (let i = 0; i < bytes.length / 2; i++) {
+                    channelData[i] = dataView.getInt16(i * 2, true) / 32768;
+                }
+
+                const source = audioContextRef.current!.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContextRef.current!.destination);
+                
+                source.onended = () => {
+                    resolve();
+                };
+
+                source.start();
+
+                onAudioReceived?.(base64Audio);
+            } catch (err) {
+                console.error('[ElevenLabs] Audio playback error:', err);
+                resolve(); // Resolve anyway to continue queue
             }
-
-            // Decode audio data (assuming PCM 16-bit mono)
-            const audioBuffer = audioContextRef.current.createBuffer(1, bytes.length / 2, 16000);
-            const channelData = audioBuffer.getChannelData(0);
-            const dataView = new DataView(bytes.buffer);
-
-            for (let i = 0; i < bytes.length / 2; i++) {
-                channelData[i] = dataView.getInt16(i * 2, true) / 32768;
-            }
-
-            const source = audioContextRef.current.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContextRef.current.destination);
-            source.start();
-
-            onAudioReceived?.(base64Audio);
-        } catch (err) {
-            console.error('[ElevenLabs] Audio playback error:', err);
-        }
+        });
     }, [onAudioReceived]);
 
     // Process audio queue
