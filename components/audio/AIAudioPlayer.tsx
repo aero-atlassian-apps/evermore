@@ -198,19 +198,37 @@ export function AIAudioPlayer({
             />
 
             {/* Visual indicator */}
-            {variant === 'waveform' && (isPlaying || isLoading) && (
-                <div className="ai-speaking-indicator">
-                    {isLoading ? (
-                        <span className="loading-dots">
-                            <span>●</span><span>●</span><span>●</span>
+            {variant === 'waveform' && (
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => {
+                            if (audioRef.current) {
+                                audioRef.current.muted = !audioRef.current.muted;
+                                // Force re-render to update icon
+                                setIsPlaying(p => p);
+                            }
+                        }}
+                        className="w-8 h-8 flex items-center justify-center rounded-full bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-lg">
+                            {audioRef.current?.muted ? 'volume_off' : 'volume_up'}
                         </span>
-                    ) : (
-                        <div className="waveform">
-                            <span className="bar"></span>
-                            <span className="bar"></span>
-                            <span className="bar"></span>
-                            <span className="bar"></span>
-                            <span className="bar"></span>
+                    </button>
+                    {(isPlaying || isLoading) && (
+                        <div className="ai-speaking-indicator">
+                            {isLoading ? (
+                                <span className="loading-dots">
+                                    <span>●</span><span>●</span><span>●</span>
+                                </span>
+                            ) : (
+                                <div className="waveform">
+                                    <span className="bar"></span>
+                                    <span className="bar"></span>
+                                    <span className="bar"></span>
+                                    <span className="bar"></span>
+                                    <span className="bar"></span>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
