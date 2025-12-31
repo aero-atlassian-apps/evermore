@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+
+# Development Dockerfile - Complete self-contained build
+FROM node:20-alpine
+
+# Install dependencies for native modules + FFmpeg for audio conversion
+# FFmpeg is required by AudioConverter service to convert WebM/Opus → WAV for STT APIs
+RUN apk add --no-cache python3 make g++ ffmpeg
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install ALL dependencies (including devDependencies)
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Expose development port
+EXPOSE 3000
+
+# Entry point - migrations and dev server handled by docker-compose command
+CMD ["npm", "run", "dev"]

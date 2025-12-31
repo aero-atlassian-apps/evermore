@@ -1,0 +1,30 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "crons": [
+        {
+            "path": "/api/cron/process-jobs",
+            "schedule": "*/5 * * * *"
+        }
+    ],
+    "env": {
+        "DATABASE_URL": "@database-url",
+        "REDIS_URL": "@redis-url",
+        "JWT_SECRET": "@jwt-secret",
+        "NEXTAUTH_SECRET": "@nextauth-secret",
+        "CRON_SECRET": "@cron-secret",
+        "GOOGLE_CLOUD_PROJECT": "@google-cloud-project",
+        "GOOGLE_CLOUD_LOCATION": "@google-cloud-location",
+        "GOOGLE_APPLICATION_CREDENTIALS_BASE64": "@google-application-credentials-base64",
+        "ELEVENLABS_API_KEY": "@elevenlabs-api-key",
+        "ELEVENLABS_VOICE_ID": "@elevenlabs-voice-id",
+        "ELEVENLABS_AGENT_ID": "@elevenlabs-agent-id",
+        "NEXT_PUBLIC_ELEVENLABS_AGENT_ID": "@next-public-elevenlabs-agent-id",
+        "PINECONE_API_KEY": "@pinecone-api-key",
+        "LLM_PROVIDER": "vertex",
+        "USE_MOCKS": "false",
+        "NEXT_PUBLIC_USE_MOCKS": "false"
+    },
+    "framework": "nextjs",
+    "buildCommand": "npm run build",
+    "outputDirectory": ".next"
+}

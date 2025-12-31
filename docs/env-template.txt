@@ -1,0 +1,120 @@
+# ============================================================
+# RECALL MVP - Environment Configuration Template
+# ============================================================
+# Copy this content to .env.local in the project root
+# ============================================================
+
+# ============================================================
+# MODE SELECTION
+# ============================================================
+# Set USE_MOCKS=true for UI testing without any APIs
+USE_MOCKS=false
+
+# ============================================================
+# DATABASE (Required)
+# ============================================================
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/recall_mvp
+DB_PROVIDER=postgres
+
+# ============================================================
+# LLM PROVIDER (Choose ONE)
+# ============================================================
+# Options: 'google_ai' (FREE), 'huggingface' (FREE), 'vertex' (paid), 'auto'
+LLM_PROVIDER=google_ai
+
+# Google AI Studio - FREE (1,500 requests/day)
+# Get key at: https://aistudio.google.com/apikey
+GOOGLE_AI_API_KEY=your-google-ai-key-here
+
+# HuggingFace - FREE (unlimited with rate limits)
+# Get key at: https://huggingface.co/settings/tokens
+HUGGINGFACE_API_KEY=your-huggingface-key-here
+
+# Google Vertex AI - PAID (for production)
+# Requires GCP project with billing
+# GOOGLE_CLOUD_PROJECT=your-gcp-project
+# GOOGLE_CLOUD_LOCATION=us-central1
+
+# ============================================================
+# SPEECH PROVIDER
+# ============================================================
+# Options: 'huggingface' (FREE), 'elevenlabs' (paid but better quality)
+SPEECH_PROVIDER=huggingface
+
+# ElevenLabs - PAID (10K chars/month free tier)
+# ELEVENLABS_API_KEY=your-key
+# ELEVENLABS_AGENT_ID=your-agent-id
+# ELEVENLABS_VOICE_ID=pNInz6obpgDQGcFmaJgB
+
+# ============================================================
+# VECTOR STORE (Optional for local dev)
+# ============================================================
+# Leave empty for InMemoryVectorStore (local dev)
+# Set for PineconeStore (production)
+# PINECONE_API_KEY=your-pinecone-key
+# PINECONE_INDEX_NAME=recall-memories
+
+# ============================================================
+# EMAIL SERVICE
+# ============================================================
+# Mailtrap - FREE sandbox for development/testing
+# Get credentials at: https://mailtrap.io
+MAILTRAP_API_TOKEN=your-mailtrap-api-token
+MAILTRAP_INBOX_ID=your-inbox-id
+MAILTRAP_FROM_EMAIL=evermore@demomailtrap.co
+MAILTRAP_FROM_NAME=Evermore
+
+# Resend - Production email service (fallback if no Mailtrap)
+# RESEND_API_KEY=your-resend-key
+
+# ============================================================
+# IMAGE GENERATION (Story Cards)
+# ============================================================
+# Uses Google Imagen via Vertex AI (same project as LLM)
+# Requires: Vertex AI API and Imagen API enabled in GCP
+# Falls back to MockImageGenerator if not configured
+
+# ============================================================
+# FINOPS / COST CONTROLS
+# ============================================================
+# Maximum cost per request in cents (default: 50)
+COST_BUDGET_CENTS=50
+# Maximum tokens per request (default: 8000)
+TOKEN_BUDGET=8000
+# Maximum agent steps per request (default: 5)
+MAX_AGENT_STEPS=5
+# Log level: debug, info, warn, error
+LOG_LEVEL=info
+
+# ============================================================
+# SECURITY
+# ============================================================
+# JWT Secret - REQUIRED in production (minimum 32 characters)
+JWT_SECRET=your-jwt-secret-change-in-production-min-32-chars
+NEXTAUTH_SECRET=your-secret-key-change-in-production
+NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+CRON_SECRET=your-cron-secret
+
+# ============================================================
+# ENVIRONMENT PROFILES
+# ============================================================
+#
+# LOCAL DEV (100% FREE):
+#   USE_MOCKS=false
+#   LLM_PROVIDER=google_ai  (or huggingface)
+#   SPEECH_PROVIDER=huggingface
+#   MAILTRAP_API_TOKEN=xxx (for email testing)
+#   (no PINECONE_API_KEY = uses InMemoryVectorStore)
+#   (no GOOGLE_CLOUD_PROJECT = uses MockImageGenerator)
+#
+# PRODUCTION:
+#   USE_MOCKS=false
+#   LLM_PROVIDER=vertex
+#   SPEECH_PROVIDER=elevenlabs
+#   PINECONE_API_KEY=xxx
+#   GOOGLE_CLOUD_PROJECT=xxx
+#   ELEVENLABS_API_KEY=xxx
+#   RESEND_API_KEY=xxx (or MAILTRAP for testing)
+# ============================================================
+

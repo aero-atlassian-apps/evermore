@@ -1,0 +1,147 @@
+# Docker Compose - LOCAL DEVELOPMENT ONLY
+#
+# ✅ SAFE FOR LOCAL TESTING - Uses dev secrets automatically
+# ❌ DO NOT USE IN PRODUCTION - Use docker-compose.yml instead
+#
+# Usage: docker-compose -f docker-compose.dev.yml up
+#
+# ONE COMMAND. ALL MAGIC. EVERYTHING RUNNING.
+
+services:
+  # Next.js App with hot-reload
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: recall_app
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/recall_mvp
+      - USE_MOCKS=false
+      - NEXT_PUBLIC_USE_MOCKS=false
+      - NODE_ENV=development
+      - DB_PROVIDER=postgres
+      # API keys will be loaded from .env.local via env_file below
+      # ===============================================
+      # FREE Speech: HuggingFace (Whisper STT + MMS TTS)
+      # ===============================================
+      - SPEECH_PROVIDER=huggingface
+      # ===============================================
+      # Vector Store: In-Memory (no Pinecone for local)
+      # Set PINECONE_API_KEY to use cloud Pinecone
+      # ===============================================
+      # - PINECONE_API_KEY=${PINECONE_API_KEY:-}
+      # ===============================================
+      # Security (DEV ONLY - These are safe for local testing)
+      # ===============================================
+      - JWT_SECRET=${JWT_SECRET}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=http://localhost:3000
+      - CRON_SECRET=${CRON_SECRET}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # ===============================================
+      # Observability (local dev = verbose logging)
+      # ===============================================
+      - LOG_LEVEL=debug
+      # Redis for session state (local Docker)
+      - REDIS_URL=redis://redis:6379
+      # Metrics endpoint auth (optional for local, required for prod)
+      # - METRICS_TOKEN=your-metrics-token
+    volumes:
+      # Hot reload - mount source code
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - recall_network
+    # Auto migrate + seed + start dev server
+    command: >
+      sh -c "
+        echo '🚀 Running database migrations...' &&
+        npm run db:push &&
+        echo '🌱 Seeding database...' &&
+        npm run seed || true &&
+        echo '✅ Starting Recall MVP...' &&
+        npm run dev
+      "
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: recall_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: recall_mvp
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - recall_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin - Database UI (Optional but included)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: recall_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@recall.dev
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    networks:
+      - recall_network
+    depends_on:
+      - db
+
+  # MailHog - Email Testing UI
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: recall_mailhog
+    ports:
+      - "1025:1025" # SMTP server
+      - "8025:8025" # Web UI
+    networks:
+      - recall_network
+
+  # Redis - Session State & Caching
+  redis:
+    image: redis:7-alpine
+    container_name: recall_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - recall_network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+
+networks:
+  recall_network:
+    driver: bridge
+
+volumes:
+  db_data:
+  redis_data:

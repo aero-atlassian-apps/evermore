@@ -1,0 +1,9 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="waveGradient" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" style="stop-color:#FAC9A8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D68D5B;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <path d="M8 32 C 8 16, 28 16, 28 32 C 28 48, 8 48, 8 32 M 28 32 C 28 16, 48 16, 48 32 C 48 48, 28 48, 28 32 M 52 32 L 54 32 M 56 28 L 56 36 M 60 24 L 60 40 M 64 28 L 64 36" stroke="url(#waveGradient)" stroke-width="5" stroke-linecap="round" fill="none" transform="translate(-2, 0)"/>
+</svg>

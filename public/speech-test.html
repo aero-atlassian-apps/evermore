@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Browser Speech Test</title>
+</head>
+<body>
+    <h1>Browser Speech Synthesis Test</h1>
+    <p>This page tests if Web Speech API works in your browser.</p>
+    
+    <button id="testBtn" style="padding: 20px; font-size: 24px; margin: 20px;">
+        Click to Test Speech
+    </button>
+    
+    <div id="status" style="margin: 20px; padding: 10px; background: #eee;"></div>
+    
+    <script>
+        const status = document.getElementById('status');
+        const btn = document.getElementById('testBtn');
+        
+        function log(msg) {
+            console.log(msg);
+            status.innerHTML += msg + '<br>';
+        }
+        
+        // Check support
+        if ('speechSynthesis' in window) {
+            log('✅ speechSynthesis is supported');
+        } else {
+            log('❌ speechSynthesis NOT supported');
+        }
+        
+        // Wait for voices
+        let voices = [];
+        function loadVoices() {
+            voices = speechSynthesis.getVoices();
+            log('📢 Voices loaded: ' + voices.length);
+            if (voices.length > 0) {
+                log('First voice: ' + voices[0].name + ' (' + voices[0].lang + ')');
+            }
+        }
+        
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        loadVoices();
+        
+        btn.addEventListener('click', function() {
+            log('🔊 Button clicked, attempting speech...');
+            
+            // Cancel any pending
+            speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance('Hello! This is a test of the browser speech synthesis.');
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            
+            // Try to find a good voice
+            const currentVoices = speechSynthesis.getVoices();
+            log('Available voices at click: ' + currentVoices.length);
+            
+            const englishVoice = currentVoices.find(v => v.lang.startsWith('en'));
+            if (englishVoice) {
+                utterance.voice = englishVoice;
+                log('Using voice: ' + englishVoice.name);
+            }
+            
+            utterance.onstart = () => log('▶️ Speech STARTED');
+            utterance.onend = () => log('⏹️ Speech ENDED');
+            utterance.onerror = (e) => log('❌ Speech ERROR: ' + e.error);
+            
+            speechSynthesis.speak(utterance);
+            log('Called speak()');
+        });
+    </script>
+</body>
+</html>

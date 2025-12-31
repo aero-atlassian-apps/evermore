@@ -1,0 +1,58 @@
+# Docker Compose - STAGING (Production-Like Build with Prod APIs)
+#
+# ✅ Uses REAL production services:
+#    - CockroachDB (cloud)
+#    - Pinecone (cloud)
+#    - Upstash Redis (cloud)
+#    - Google Vertex AI (cloud)
+#    - ElevenLabs (cloud)
+#
+# 📧 Uses LOCAL MailHog for email testing
+#
+# 🚀 Uses PRODUCTION BUILD (compiled, not dev mode)
+#
+# ⚠️ This uses REAL API quotas and credits!
+#
+# Usage: docker-compose -f docker-compose.staging.yml up --build
+#
+
+services:
+  # Next.js App - PRODUCTION BUILD with external prod services
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: recall-staging:latest
+    container_name: recall_staging
+    restart: unless-stopped
+    env_file:
+      - .env.staging
+    ports:
+      - "3000:3000"
+    environment:
+      # Production mode - compiled build
+      - NODE_ENV=production
+      # Force use of real services (not mocks)
+      - USE_MOCKS=false
+      - NEXT_PUBLIC_USE_MOCKS=false
+      # SMTP for MailHog (local container)
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+    depends_on:
+      - mailhog
+    networks:
+      - recall_staging_network
+
+  # MailHog - Email Testing (Staging Only)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: recall_staging_mailhog
+    ports:
+      - "1025:1025" # SMTP server
+      - "8025:8025" # Web UI at http://localhost:8025
+    networks:
+      - recall_staging_network
+
+networks:
+  recall_staging_network:
+    driver: bridge
