@@ -31,7 +31,7 @@ export async function register() {
                 // Don't exit in dev mode if possible, or at least log it loudly
             });
 
-            process.on('unhandledRejection', (reason, promise) => {
+            process.on('unhandledRejection', (reason, _promise) => {
                 console.error('[Instrumentation] 💥 UNHANDLED REJECTION:', reason);
             });
             (global as unknown as { __handlersInstalled: boolean }).__handlersInstalled = true;

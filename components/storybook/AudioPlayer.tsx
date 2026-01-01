@@ -121,7 +121,7 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
             console.warn('[AudioPlayer] Server TTS failed:', err);
             return false;
         }
-    }, [text, onPlayingChange, cleanup]);
+    }, [text, volume, onPlayingChange, cleanup]);
 
     // Fallback to Web Speech API
     const triggerBrowserTTS = useCallback(() => {
@@ -202,7 +202,7 @@ export function AudioPlayer({ text, onPlayingChange, className = '', autoPlay = 
         synthRef.current.speak(utterance);
         console.log('[AudioPlayer] Browser TTS speak() called');
         return true;
-    }, [text, onPlayingChange]);
+    }, [text, volume, onPlayingChange]);
 
     const handlePlay = useCallback(async () => {
         if (isPlaying) return;
