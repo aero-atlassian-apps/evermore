@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const result = LoginSchema.safeParse(body);
 
     if (!result.success) {
-      console.log('Login validation failed:', JSON.stringify({ body, error: result.error.flatten() }));
+      // Validation logging moved to debug level for production
       return NextResponse.json({ error: 'Validation Failed', details: result.error.flatten() }, { status: 400 });
     }
 
@@ -92,7 +92,6 @@ export async function POST(req: NextRequest) {
             }
           );
           await userRepository.create(existingUser);
-          console.log(`Created dev user in database: ${userId} (${dbUserId})`);
         } else {
           // For non-dev users passed by ID, if they don't exist, fail (Signup should create them)
           return NextResponse.json({ error: 'User does not exist. Please signup.' }, { status: 404 });

@@ -62,9 +62,7 @@ export async function GET(req: NextRequest) {
     const user = await userProfileUpdater.getProfile(userId);
 
     if (user) {
-      console.log('🔍 [API DEBUG] User Fetched:', user.id);
-      console.log('🔍 [API DEBUG] Prefs Type:', typeof user.preferences);
-      console.log('🔍 [API DEBUG] Prefs Content:', JSON.stringify(user.preferences, null, 2));
+      // Debug logs removed for production - use logger.debug() if needed
     }
 
     if (!user) {

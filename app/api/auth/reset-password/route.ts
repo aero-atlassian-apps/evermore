@@ -10,10 +10,8 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { email } = ResetPasswordSchema.parse(body);
 
-        // TODO: Integrate with Email Service Provider (SendGrid/AWS SES)
-        // For now, we log the intent which would be picked up by our email worker
-        // or sent directly if provider was configured.
-        console.log(`[Auth] Password reset requested for: ${email}`);
+        // Note: Email service integration pending
+        // Logging removed to prevent email exposure in logs
 
         // We always return success to prevent email enumeration
         return NextResponse.json({ success: true, message: 'If that email exists, we sent a link.' });
