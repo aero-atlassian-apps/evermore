@@ -5,9 +5,12 @@ import {
     sanitizeForLogging
 } from '@/lib/core/application/security/InputSanitization';
 import { logger } from '@/lib/core/application/Logger';
+import { recordHttpRequest } from '@/lib/core/application/observability/Metrics';
 
 export async function POST(req: NextRequest) {
     const traceId = req.headers.get('x-trace-id') || crypto.randomUUID();
+    const reqStart = Date.now();
+    let statusCode = 200;
 
     try {
         const body = await req.json();
@@ -42,9 +45,16 @@ export async function POST(req: NextRequest) {
             // SECURITY: Don't expose stack traces in production
             ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
         });
+        statusCode = 500;
         return NextResponse.json(
             { error: 'Failed to process message' },
             { status: 500 }
         );
+    } finally {
+        try {
+            recordHttpRequest('POST', '/api/chat', statusCode, Date.now() - reqStart);
+        } catch {
+            // no-op
+        }
     }
 }

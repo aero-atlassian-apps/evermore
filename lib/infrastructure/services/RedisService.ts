@@ -1,5 +1,6 @@
 
 import Redis from 'ioredis';
+import { logger } from '../../core/application/Logger';
 
 export class RedisService {
     private client: Redis | null = null;
@@ -13,7 +14,7 @@ export class RedisService {
         if (connectionUrl) {
             this.connect(connectionUrl);
         } else {
-            console.warn('[RedisService] No REDIS_URL provided. Operating in no-op mode (in-memory fallbacks may be needed).');
+            logger.warn('[RedisService] No REDIS_URL provided. Operating in no-op mode (in-memory fallbacks may be needed).');
         }
     }
 
@@ -41,7 +42,7 @@ export class RedisService {
             this.client.on('connect', () => {
                 this.isConnected = true;
                 if (!this.hasLoggedConnect) {
-                    console.log('[RedisService] Connected to Redis' + (isUpstash ? ' (Upstash TLS)' : ''));
+                    logger.info('[RedisService] Connected to Redis' + (isUpstash ? ' (Upstash TLS)' : ''));
                     this.hasLoggedConnect = true;
                 }
             });
@@ -50,7 +51,7 @@ export class RedisService {
                 this.isConnected = false;
                 // Only log unique errors, not every retry
                 if (!err.message.includes('max retries')) {
-                    console.error('[RedisService] Redis error:', err.message);
+                    logger.error('[RedisService] Redis error', { error: err.message });
                 }
             });
 
@@ -58,7 +59,7 @@ export class RedisService {
                 this.isConnected = false;
             });
         } catch (err) {
-            console.error('[RedisService] Failed to initialize Redis client', err);
+            logger.error('[RedisService] Failed to initialize Redis client', { error: (err as any)?.message || String(err) });
         }
     }
 
@@ -81,7 +82,7 @@ export class RedisService {
                 await this.client.set(key, value);
             }
         } catch (err) {
-            console.error(`[RedisService] Failed to set key ${key}`, err);
+            logger.error('[RedisService] Failed to set key', { key, error: (err as any)?.message || String(err) });
         }
     }
 
@@ -90,7 +91,7 @@ export class RedisService {
         try {
             await this.client.del(key);
         } catch (err) {
-            console.error(`[RedisService] Failed to del key ${key}`, err);
+            logger.error('[RedisService] Failed to del key', { key, error: (err as any)?.message || String(err) });
         }
     }
 
@@ -99,7 +100,7 @@ export class RedisService {
         try {
             await this.client.expire(key, seconds);
         } catch (err) {
-            console.error(`[RedisService] Failed to expire key ${key}`, err);
+            logger.error('[RedisService] Failed to expire key', { key, error: (err as any)?.message || String(err) });
         }
     }
 

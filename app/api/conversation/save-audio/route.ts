@@ -10,6 +10,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { db, pendingAudio, sessions } from '@/lib/infrastructure/adapters/db';
 import { eq } from 'drizzle-orm';
 import { logger } from '@/lib/core/application/Logger';
+import { recordHttpRequest } from '@/lib/core/application/observability/Metrics';
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/core/application/security/RateLimiter';
 
 // Lazy Supabase client initialization (avoids build-time failures)
 let _supabaseClient: SupabaseClient | null = null;
@@ -30,7 +32,15 @@ function getSupabaseClient(): SupabaseClient {
 }
 
 export async function POST(request: NextRequest) {
+    const reqStart = Date.now();
+    let statusCode = 200;
     try {
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
+        const rate = checkRateLimit(request, RATE_LIMIT_PRESETS.strict);
+        if (!rate.success) {
+            statusCode = 429;
+            return NextResponse.json({ error: 'Too Many Requests' }, { status: 429, headers: rate.retryAfterSeconds ? new Headers({ 'Retry-After': String(rate.retryAfterSeconds) }) : undefined });
+        }
         const formData = await request.formData();
         const file = formData.get('file') as File;
         const sessionId = formData.get('sessionId') as string;
@@ -69,7 +79,7 @@ export async function POST(request: NextRequest) {
             });
 
         if (uploadError) {
-            logger.error('[SaveAudio] Storage upload failed', { error: uploadError.message });
+            logger.error('[SaveAudio] Storage upload failed', { traceId, error: uploadError.message });
             return NextResponse.json(
                 { error: 'Failed to save audio' },
                 { status: 500 }
@@ -94,6 +104,7 @@ export async function POST(request: NextRequest) {
         }).returning();
 
         logger.info('[SaveAudio] Audio saved for later processing', {
+            traceId,
             pendingAudioId: record.id,
             sessionId,
             size: buffer.length
@@ -107,10 +118,18 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error: any) {
-        logger.error('[SaveAudio] Error saving audio', { error: error.message });
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
+        logger.error('[SaveAudio] Error saving audio', { traceId, error: error.message });
+        statusCode = 500;
         return NextResponse.json(
             { error: 'Failed to save audio' },
             { status: 500 }
         );
+    } finally {
+        try {
+            recordHttpRequest('POST', '/api/conversation/save-audio', statusCode, Date.now() - reqStart);
+        } catch {
+            // no-op
+        }
     }
 }

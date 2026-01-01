@@ -3,12 +3,17 @@ import { db } from '@/lib/infrastructure/adapters/db';
 import { chapters } from '@/lib/infrastructure/adapters/db/schema';
 import { eq } from 'drizzle-orm';
 import { pdfService } from '@/lib/infrastructure/di/container';
+import { logger } from '@/lib/core/application/Logger';
+import { recordHttpRequest } from '@/lib/core/application/observability/Metrics';
 
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const reqStart = Date.now();
+    let statusCode = 200;
     try {
+        const traceId = req.headers.get('x-trace-id') || crypto.randomUUID();
         const id = (await params).id;
 
         // Fetch chapter from database
@@ -18,6 +23,7 @@ export async function GET(
             .limit(1);
 
         if (!chapter) {
+            statusCode = 404;
             return NextResponse.json({ error: 'Chapter not found' }, { status: 404 });
         }
 
@@ -39,7 +45,15 @@ export async function GET(
             },
         });
     } catch (error: any) {
-        console.error('Chapter PDF generation error:', error);
+        const traceId = req.headers.get('x-trace-id') || crypto.randomUUID();
+        logger.error('Chapter PDF generation error', { traceId, error: error.message || String(error) });
+        statusCode = 500;
         return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
+    } finally {
+        try {
+            recordHttpRequest('GET', '/api/chapters/[id]/pdf', statusCode, Date.now() - reqStart);
+        } catch {
+            // no-op
+        }
     }
 }

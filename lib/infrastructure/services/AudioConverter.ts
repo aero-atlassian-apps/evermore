@@ -11,6 +11,7 @@
 
 import { spawn } from 'child_process';
 import { Readable, Writable } from 'stream';
+import { logger } from '../../core/application/Logger';
 
 export interface AudioConversionResult {
     buffer: Buffer;
@@ -123,19 +124,19 @@ export class AudioConverter {
             });
 
             proc.on('error', (err) => {
-                console.error('[AudioConverter] FFmpeg spawn error:', err.message);
+                logger.error('[AudioConverter] FFmpeg spawn error', { error: err.message });
                 reject(new Error(`FFmpeg not available: ${err.message}`));
             });
 
             proc.on('close', (code) => {
                 if (code !== 0) {
-                    console.error('[AudioConverter] FFmpeg conversion failed:', stderr);
+                    logger.error('[AudioConverter] FFmpeg conversion failed', { error: stderr.slice(-500) });
                     reject(new Error(`FFmpeg exited with code ${code}: ${stderr.slice(-500)}`));
                     return;
                 }
 
                 const outputBuffer = Buffer.concat(outputChunks);
-                console.log(`[AudioConverter] Converted ${inputBuffer.length} bytes (${inputFormat}) → ${outputBuffer.length} bytes (${opts.targetFormat})`);
+                logger.info('[AudioConverter] Converted audio', { inputBytes: inputBuffer.length, inputFormat, outputBytes: outputBuffer.length, targetFormat: opts.targetFormat });
 
                 resolve({
                     buffer: outputBuffer,
@@ -167,7 +168,7 @@ export class AudioConverter {
         if (normalized.includes('aac')) return 'aac';
 
         // Default to webm (common browser MediaRecorder format)
-        console.warn(`[AudioConverter] Unknown MIME type: ${mimeType}, defaulting to webm`);
+        logger.warn('[AudioConverter] Unknown MIME type, defaulting to webm', { mimeType });
         return 'webm';
     }
 

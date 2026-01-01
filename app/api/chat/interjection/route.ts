@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { llmProvider, sessionRepository } from '@/lib/infrastructure/di/container';
 import { InterjectionAgent } from '@/lib/core/application/agents/InterjectionAgent';
+import { logger } from '@/lib/core/application/Logger';
+import { recordHttpRequest } from '@/lib/core/application/observability/Metrics';
 
 /**
  * POST /api/chat/interjection
@@ -19,7 +21,10 @@ import { InterjectionAgent } from '@/lib/core/application/agents/InterjectionAge
  * - type?: string
  */
 export async function POST(request: NextRequest) {
+    const reqStart = Date.now();
+    let statusCode = 200;
     try {
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
         const body = await request.json();
         const { sessionId, silenceDuration, recentTranscript = [] } = body;
 
@@ -42,7 +47,7 @@ export async function POST(request: NextRequest) {
                 userName = session.metadata.userName;
             }
         } catch (e) {
-            console.warn('[Interjection API] Failed to fetch session:', e);
+            logger.warn('[Interjection API] Failed to fetch session', { traceId, error: (e as any)?.message || String(e) });
         }
 
         // Convert transcript to expected format
@@ -71,12 +76,20 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error: any) {
-        console.error('[Interjection API] Error:', error);
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
+        logger.error('[Interjection API] Error', { traceId, error: error });
+        statusCode = 500;
         // GRACEFUL FALLBACK: Return no interjection instead of error
         // Conversation continues seamlessly - user doesn't know AI had an issue
         return NextResponse.json({
             shouldInterject: false,
             // No error exposed to client
         });
+    } finally {
+        try {
+            recordHttpRequest('POST', '/api/chat/interjection', statusCode, Date.now() - reqStart);
+        } catch {
+            // no-op
+        }
     }
 }

@@ -1,21 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DrizzleChapterRepository } from '@/lib/infrastructure/adapters/db/DrizzleChapterRepository';
 import { DrizzleUserRepository } from '@/lib/infrastructure/adapters/db/DrizzleUserRepository';
+import { logger } from '@/lib/core/application/Logger';
+import { recordHttpRequest } from '@/lib/core/application/observability/Metrics';
 
 const chapterRepository = new DrizzleChapterRepository();
 const userRepository = new DrizzleUserRepository();
 
 export async function GET(req: NextRequest) {
+  const reqStart = Date.now();
+  let statusCode = 200;
   try {
+    const traceId = req.headers.get('x-trace-id') || crypto.randomUUID();
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId'); // Family member ID
 
     if (!userId) {
+      statusCode = 400;
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
     }
 
     const familyUser = await userRepository.findById(userId);
     if (!familyUser) {
+         statusCode = 404;
          return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -38,7 +45,15 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ chapters });
   } catch (error: any) {
-    console.error('Error fetching chapters:', error);
+    const traceId = req.headers.get('x-trace-id') || crypto.randomUUID();
+    logger.error('Error fetching chapters', { traceId, error: error.message || String(error) });
+    statusCode = 500;
     return NextResponse.json({ error: error.message }, { status: 500 });
+  } finally {
+    try {
+      recordHttpRequest('GET', '/api/family/chapters', statusCode, Date.now() - reqStart);
+    } catch {
+      // no-op
+    }
   }
 }
