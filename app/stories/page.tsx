@@ -74,44 +74,34 @@ export default function StoriesPage() {
   useEffect(() => {
     async function fetchStories() {
       try {
-        // First check if we have a valid session
-        const sessionRes = await fetch('/api/session/check');
-        if (!sessionRes.ok) {
-          // Not logged in, redirect to login
+        // Single combined API call (replaces 3 sequential calls)
+        const res = await fetch('/api/stories');
+
+        if (res.status === 401) {
           window.location.href = '/login';
           return;
         }
 
-        // Get user profile to get userId
-        const profileRes = await fetch('/api/users/profile');
-        if (!profileRes.ok) {
-          throw new Error('Failed to fetch profile');
-        }
-        const profile = await profileRes.json();
-        if (profile.preferences?.favoriteChapterIds) {
-          setFavoriteIds(profile.preferences.favoriteChapterIds);
-        }
-
-        // SECURITY: Enforce Persona - Only seniors can access stories page
-        if (profile.role !== 'senior') {
-          window.location.href = '/family'; // Redirect family members to their dashboard
+        if (res.status === 403) {
+          const data = await res.json();
+          if (data.redirect) {
+            window.location.href = data.redirect;
+          }
           return;
         }
 
-        // Fetch chapters for this user
-        const chaptersRes = await fetch(`/api/users/${profile.userId}/chapters`, {
-          headers: {
-            'x-user-id': profile.userId,
-          },
-        });
-        if (!chaptersRes.ok) {
-          throw new Error('Failed to fetch chapters');
+        if (!res.ok) {
+          throw new Error('Failed to fetch stories');
         }
-        const chapters: Chapter[] = await chaptersRes.json();
+
+        const { profile, chapters } = await res.json();
+
+        if (profile.favoriteChapterIds) {
+          setFavoriteIds(profile.favoriteChapterIds);
+        }
 
         // Transform chapters to stories format
-        const transformedStories: Story[] = chapters.map((chapter, index) => {
-          // Use AI-generated cover image if available, otherwise fallback
+        const transformedStories: Story[] = chapters.map((chapter: any, index: number) => {
           const imageUrl = chapter.coverImageUrl || FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
 
           return {

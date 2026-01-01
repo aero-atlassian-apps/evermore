@@ -187,7 +187,7 @@ export class AgenticNarrationAgent {
             dryRun: false,
         };
 
-        // Step 1: Prepare text (strip markdown, add pauses)
+        // Step 1: Prepare text (strip markdown, add pauses) - FAST, no LLM
         const prepResult = await this.toolRegistry.execute(
             'prepare-text-speech',
             { text },
@@ -201,11 +201,13 @@ export class AgenticNarrationAgent {
         let emotion = options?.emotion || 'neutral';
         let voiceStyle = 'warm-storytelling';
 
-        // BIAS: If user context implies gender, maybe bias default voice?
-        // Note: ElevenLabs voices are specific. We map "voiceStyle" to ID.
-        // We can add logic here: if context.gender == 'female', prefer female voices.
+        // PERFORMANCE OPTIMIZATION: Skip LLM call for short texts (< 500 chars)
+        // This saves ~1-3 seconds of latency. Use default warm storytelling voice.
+        const shouldSkipEmotionDetection =
+            options?.emotion || // Emotion already specified
+            preparedText.length < 500; // Short text, use default
 
-        if (!options?.emotion) {
+        if (!shouldSkipEmotionDetection) {
             const emotionResult = await this.toolRegistry.execute(
                 'detect-emotion-voice',
                 { text: preparedText },
@@ -213,12 +215,9 @@ export class AgenticNarrationAgent {
             );
             emotion = (emotionResult.data as any)?.emotion || 'neutral';
             voiceStyle = (emotionResult.data as any)?.voiceStyle || 'warm-storytelling';
+        } else {
+            console.log('   ⚡ Fast path: Using default voice style (skipping LLM emotion detection)');
         }
-
-        // Gender bias logic removed to ensure consistent use of high-quality 'Adam' voice for now.
-        // if (options?.context?.gender === 'female' && voiceStyle === 'warm-storytelling') {
-        //     if (voiceStyle === 'warm-storytelling') voiceStyle = 'gentle-reflective';
-        // }
 
         console.log(`   ✓ Prepared: ${wordCount} words, emotion: ${emotion}, style: ${voiceStyle}`);
 
