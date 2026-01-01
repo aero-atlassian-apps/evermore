@@ -6,21 +6,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySession } from '@/lib/infrastructure/auth/session';
 import { chapterRepository, userRepository } from '@/lib/infrastructure/di/container';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
     try {
-        // 1. Verify session
-        const session = await verifySession(request);
-        if (!session) {
+        // 1. Get user from middleware-injected headers
+        const userId = request.headers.get('x-user-id');
+        const userRole = request.headers.get('x-user-role');
+
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         // 2. Get user profile
-        const user = await userRepository.findById(session.userId);
+        const user = await userRepository.findById(userId);
         if (!user) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
         }
 
         // 4. Fetch chapters for this user
-        const chapters = await chapterRepository.findByUserId(session.userId);
+        const chapters = await chapterRepository.findByUserId(userId);
 
         // 5. Return combined response
         return NextResponse.json({
