@@ -65,7 +65,7 @@ export class BackgroundWorker {
                     const errorMessage = err?.message || String(err);
                     const errorStack = err?.stack || '';
                     logger.error(`[Worker] Job ${job.id} failed: ${errorMessage}`);
-                    console.error('[Worker] Full error:', errorMessage, errorStack);
+                    logger.error('[Worker] Full error', { jobId: job.id, error: errorMessage, stack: errorStack });
 
                     // RETRY LOGIC
                     const currentRetries = (job.payload as any)?.retries || 0;
@@ -89,7 +89,7 @@ export class BackgroundWorker {
             }
 
         } catch (err: unknown) {
-            logger.error('[Worker] Error in processing loop:', err as Record<string, unknown>);
+            logger.error('[Worker] Error in processing loop', err as Record<string, unknown>);
         } finally {
             this.isProcessing = false;
         }

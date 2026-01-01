@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { llmProvider, sessionRepository, speechProvider } from '@/lib/infrastructure/di/container';
 import { InterjectionAgent } from '@/lib/core/application/agents/InterjectionAgent';
+import { logger } from '@/lib/core/application/Logger';
 
 /**
  * POST /api/chat/welcome
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { sessionId, userId, includeAudio = false } = body;
         userName = body.userName || 'there';
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
 
         if (!sessionId || !userId) {
             return NextResponse.json(
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
                 warmupTopic = session.metadata.warmup_data.extractedTopic;
             }
         } catch (e) {
-            console.warn('[Welcome API] Failed to fetch session:', e);
+            logger.warn('[Welcome API] Failed to fetch session', { traceId, error: (e as any)?.message || String(e) });
         }
 
         // Generate greeting using InterjectionAgent
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
                 const base64 = audioBuffer.toString('base64');
                 audioDataUrl = `data:audio/mpeg;base64,${base64}`;
             } catch (e) {
-                console.warn('[Welcome API] TTS failed:', e);
+                logger.warn('[Welcome API] TTS failed', { traceId, error: (e as any)?.message || String(e) });
             }
         }
 
@@ -89,7 +91,8 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error: any) {
-        console.error('[Welcome API] Error:', error);
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
+        logger.error('[Welcome API] Error', { traceId, error: error });
         // GRACEFUL FALLBACK: Return a pre-written greeting instead of error
         // User experience is seamless - they won't know AI failed
         const fallbackGreeting = `Hello ${userName}! I'm so glad you're here today. What memory would you like to share?`;

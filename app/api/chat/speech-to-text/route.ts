@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { speechProvider } from '@/lib/infrastructure/di/container';
 import { getAudioConverter } from '@/lib/infrastructure/services/AudioConverter';
 import { logger } from '@/lib/core/application/Logger';
+import { recordHttpRequest } from '@/lib/core/application/observability/Metrics';
 
 export async function POST(request: NextRequest) {
+    const reqStart = Date.now();
+    let statusCode = 200;
     try {
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
         const formData = await request.formData();
         const file = formData.get('file') as File;
 
@@ -33,23 +37,26 @@ export async function POST(request: NextRequest) {
                     const convertedData = new Uint8Array(converted.buffer);
                     buffer = Buffer.from(convertedData);
                     contentType = converted.format;
-                    logger.info('[STT] Audio converted to WAV for STT compatibility');
+                    logger.info('[STT] Audio converted to WAV for STT compatibility', { traceId });
                 } else {
-                    logger.warn('[STT] FFmpeg not available, sending original format');
+                    logger.warn('[STT] FFmpeg not available, sending original format', { traceId });
                 }
             } catch (conversionError: any) {
-                logger.warn('[STT] Audio conversion failed, trying original format', { error: conversionError.message });
+                logger.warn('[STT] Audio conversion failed, trying original format', { traceId, error: conversionError.message });
                 // Continue with original format - some APIs might still accept it
             }
         }
 
         const result = await speechProvider.speechToText(buffer, contentType);
+        logger.info('[STT] STT succeeded', { traceId, length: buffer.length, mime: contentType });
         // Return only the text string, not the full SpeechToTextResult object
         // This prevents "Objects are not valid as React child" errors
         return NextResponse.json({ text: result.text });
 
     } catch (error: any) {
-        logger.error('[STT] STT failed', { error: error.message });
+        const traceId = request.headers.get('x-trace-id') || crypto.randomUUID();
+        logger.error('[STT] STT failed', { traceId, error: error.message });
+        statusCode = 500;
 
         // Return a special response that tells the client to use browser STT fallback
         // This enables graceful degradation when Google Cloud credentials aren't working
@@ -64,6 +71,12 @@ export async function POST(request: NextRequest) {
                 ? 'Server STT unavailable. Please use browser speech recognition.'
                 : null
         }, { status: 500 });
+    } finally {
+        try {
+            recordHttpRequest('POST', '/api/chat/speech-to-text', statusCode, Date.now() - reqStart);
+        } catch {
+            // no-op
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 import "./globals.css"
 import { MSWInitializer } from '@/components/common/MSWInitializer';
+import { VoiceWarmup } from '@/components/audio/VoiceWarmup';
 
 export const viewport = {
   width: 'device-width',
@@ -43,8 +44,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* Icons */}
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+        {/* Audio Providers Preconnect */}
+        <link rel="preconnect" href="https://api.elevenlabs.io" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://texttospeech.googleapis.com" crossOrigin="anonymous" />
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
+        <VoiceWarmup />
         <MSWInitializer />
         {children}
       </body>

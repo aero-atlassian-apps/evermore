@@ -15,6 +15,7 @@ import type { WarmUpPhaseResult } from '@/lib/types/elevenlabs-websocket';
 import Image from 'next/image';
 import { ConversationStatus } from '@/components/conversation/ConversationStatus';
 import { MessageBubble } from '@/components/conversation/MessageBubble';
+import { features } from '@/lib/core/config/Features';
 
 export interface Message {
   id: string;
@@ -432,19 +433,17 @@ export default function ActiveConversationPage() {
         await sendStreamingMessage(sessionId!, data.text);
 
       } else if (data.useBrowserFallback) {
-        // Server STT failed due to credentials - use browser fallback for FUTURE turns
         console.warn('[Conversation] Server STT unavailable, switching to browser fallback');
         setShouldUseBrowserSTT(true);
-        setToastMessage('Switching to browser speech recognition');
-
-        // For THIS turn, we missed the audio. 
-        // We could ask user to repeat?
-        setTranscript(prev => [...prev, {
-          id: `sys-${Date.now()}`,
-          speaker: 'system',
-          text: '⚠️ Connection issue. Switched to browser mode. Please speak again.',
-          timestamp: new Date().toISOString()
-        }]);
+        if (!features.INVISIBLE_FALLBACK_UI) {
+          setToastMessage('Switching to browser speech recognition');
+          setTranscript(prev => [...prev, {
+            id: `sys-${Date.now()}`,
+            speaker: 'system',
+            text: '⚠️ Connection issue. Switched to browser mode. Please speak again.',
+            timestamp: new Date().toISOString()
+          }]);
+        }
       } else {
         console.error(`[Conversation ${sessionId}] STT failed:`, res.status, data.error);
         setToastMessage('Speech recognition failed');
