@@ -349,6 +349,65 @@ export default function StoryImmersionPage({ params }: { params: Promise<{ id: s
     fetchChapter();
   }, [resolvedParams.id]);
 
+  // PREFETCH AUDIO: Start generating TTS in background as soon as story loads
+  // This makes the Play button instant instead of waiting 10-30 seconds
+  useEffect(() => {
+    if (!story?.content || audioUrlRef.current) return;
+
+    // Don't prefetch if there's already a pre-generated audio URL
+    if (story.audioHighlightUrl) {
+      console.log('[Audio Prefetch] Using pre-generated audio, skipping TTS prefetch');
+      return;
+    }
+
+    const prefetchAudio = async () => {
+      console.log('[Audio Prefetch] Starting background TTS generation...');
+      const cleanText = prepareTextForTTS(story.content).substring(0, 4000);
+
+      try {
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: cleanText }),
+        });
+
+        if (response.ok) {
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          audioUrlRef.current = audioUrl;
+
+          // Pre-create audio element for instant playback
+          const audio = new Audio(audioUrl);
+          audio.volume = volume;
+          audio.preload = 'auto';
+          audioRef.current = audio;
+
+          audio.onloadedmetadata = () => {
+            setAudioDuration(audio.duration);
+          };
+
+          audio.ontimeupdate = () => {
+            setAudioProgress(audio.currentTime);
+          };
+
+          audio.onended = () => {
+            setIsPlaying(false);
+            setAudioProgress(0);
+          };
+
+          console.log('[Audio Prefetch] ✓ Audio cached and ready for instant playback');
+        }
+      } catch (err) {
+        console.warn('[Audio Prefetch] Background prefetch failed, will fallback on play:', err);
+        // Silent fail - user can still click play and it will try again or use browser speech
+      }
+    };
+
+    // Start prefetch after a short delay to not block initial render
+    const timeoutId = setTimeout(prefetchAudio, 500);
+    return () => clearTimeout(timeoutId);
+  }, [story?.content, story?.audioHighlightUrl, volume]);
+
   if (loading) {
     return (
       <AppShell userType="family" userName="User" showNav={true}>
