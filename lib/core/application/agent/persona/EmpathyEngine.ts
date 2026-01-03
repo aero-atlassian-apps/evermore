@@ -1027,3 +1027,13 @@ export class EmpathyEngine {
         this.emotionHistory = [];
     }
 }
+
+// ============================================================================
+// Singleton Export
+// ============================================================================
+
+/**
+ * Singleton instance of EmpathyEngine for application-wide use.
+ */
+export const empathyEngine = new EmpathyEngine();
+

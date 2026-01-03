@@ -112,7 +112,7 @@ jobs:
   gate:
     name: CI Gate
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, unit-tests, e2e-tests, build]
+    needs: [lint, typecheck, unit-tests, e2e-tests, build, performance-check]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -121,8 +121,37 @@ jobs:
              [[ "${{ needs.typecheck.result }}" != "success" ]] || \
              [[ "${{ needs.unit-tests.result }}" != "success" ]] || \
              [[ "${{ needs.e2e-tests.result }}" != "success" ]] || \
-             [[ "${{ needs.build.result }}" != "success" ]]; then
+             [[ "${{ needs.build.result }}" != "success" ]] || \
+             [[ "${{ needs.performance-check.result }}" != "success" ]]; then
             echo "❌ CI Gate Failed"
             exit 1
           fi
           echo "✅ All CI checks passed"
+
+  performance-check:
+    name: Performance Budget Check
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build for analysis
+        run: npm run build
+        env:
+          NODE_ENV: production
+          DATABASE_URL: 'postgresql://localhost:5432/test'
+          JWT_SECRET: 'perf-secret-at-least-32-characters-long'
+          NEXTAUTH_SECRET: 'perf-secret-at-least-32-characters-long'
+      - name: Check bundle sizes
+        run: node scripts/check-bundle-size.mjs
+      - name: Upload bundle analysis
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bundle-analysis
+          path: .next/bundle-analysis.json
+          retention-days: 30

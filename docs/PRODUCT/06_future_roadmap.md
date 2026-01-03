@@ -1,14 +1,19 @@
 # 14. Future Evolution & Roadmap
 
-## 14.1 Known Limitations (MVP)
+## 14.1 Known Limitations (MMP)
 
-1.  **Memory Window:** The AI only "remembers" the last 5 turns + RAG context. Deep, multi-session continuity is imperfect.
-2.  **Voice Interruption:** Standard VAD (Voice Activity Detection) can sometimes cut off slow speakers (common in seniors).
+1.  **Memory Window:** The AI uses a tiered memory system (Short-term + RAG). Deeper continuity is improved but still evolving.
+2.  **Voice Interruption:** Standard VAD is tuned for seniors but network latency can still cause occasional overlaps.
 3.  **Language:** English only.
 
 ---
 
-## 14.2 Planned Evolution
+## 14.2 Roadmap & Evolution
+
+### **Phase 1: The MMP (Completed)**
+-   **Core:** Data Flywheel (Signals + Feedback).
+-   **Infra:** Local AI Stack (Ollama, Kokoro, LocalAI) for privacy-first option.
+-   **Validation:** Full E2E Test Suite (Playwright) + Accessibility Compliance.
 
 ### **Phase 2: The Biographer's Studio (Q3)**
 -   **Feature:** Edit Chapters manually.
@@ -28,5 +33,5 @@
 ## 14.3 Technical Debt Strategy
 
 -   **Refactoring:** `ProcessMessageUseCase` is getting large. Plan to split into `VoiceOrchestrator` and `TextChatService`.
--   **Testing:** E2E coverage is low. dedicate 20% of sprint time to Playwright tests.
--   **Database:** JSONB is flexible but hard to migrate. Plan to normalize `entities` if search performance degrades.
+-   **Testing:** E2E coverage is **COMPLETE**. Continue maintaining Playwright suites for new features.
+-   **Database:** JSONB is flexible. Normalization planned for Phase 3.

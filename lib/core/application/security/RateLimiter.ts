@@ -301,5 +301,214 @@ export function checkRateLimit(
     return limiter.check(identifier, config);
 }
 
-// Export singleton
+// ============================================================================
+// Redis Rate Limiter (Distributed)
+// ============================================================================
+
+/**
+ * Redis-based rate limiter using sliding window with Lua script.
+ * 
+ * Uses atomic Lua script for accurate distributed rate limiting.
+ * Automatically falls back to in-memory if Redis unavailable.
+ */
+export class RedisRateLimiter {
+    private static instance: RedisRateLimiter;
+    private redisClient: import('ioredis').default | null = null;
+    private fallbackLimiter: InMemoryRateLimiter;
+    private initialized = false;
+
+    // Lua script for atomic sliding window rate limiting
+    private readonly slidingWindowScript = `
+        local key = KEYS[1]
+        local now = tonumber(ARGV[1])
+        local window = tonumber(ARGV[2])
+        local limit = tonumber(ARGV[3])
+        
+        -- Remove expired entries
+        redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+        
+        -- Count current requests
+        local count = redis.call('ZCARD', key)
+        
+        if count < limit then
+            -- Add new request
+            redis.call('ZADD', key, now, now .. '-' .. math.random())
+            redis.call('EXPIRE', key, math.ceil(window / 1000) + 1)
+            return {1, limit - count - 1, now + window}
+        else
+            -- Rate limited
+            local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+            local resetAt = oldest[2] and (tonumber(oldest[2]) + window) or (now + window)
+            return {0, 0, resetAt}
+        end
+    `;
+
+    private constructor() {
+        this.fallbackLimiter = InMemoryRateLimiter.getInstance();
+    }
+
+    static getInstance(): RedisRateLimiter {
+        if (!RedisRateLimiter.instance) {
+            RedisRateLimiter.instance = new RedisRateLimiter();
+        }
+        return RedisRateLimiter.instance;
+    }
+
+    /**
+     * Initialize Redis connection lazily.
+     */
+    private async ensureInitialized(): Promise<boolean> {
+        if (this.initialized) {
+            return this.redisClient !== null;
+        }
+
+        try {
+            // Dynamic import to avoid circular dependencies
+            const { getRedisClient } = await import('@/lib/infrastructure/adapters/cache/redis-connection');
+            this.redisClient = getRedisClient();
+            this.initialized = true;
+
+            if (this.redisClient) {
+                logger.info('[RateLimiter] Redis rate limiter initialized');
+            } else {
+                logger.warn('[RateLimiter] Redis unavailable, using in-memory fallback');
+            }
+
+            return this.redisClient !== null;
+        } catch (error) {
+            logger.warn('[RateLimiter] Failed to initialize Redis, using fallback', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            this.initialized = true;
+            return false;
+        }
+    }
+
+    /**
+     * Check rate limit using Redis or fallback.
+     */
+    async check(identifier: string, config: RateLimitConfig): Promise<RateLimitResult> {
+        const hasRedis = await this.ensureInitialized();
+
+        if (!hasRedis || !this.redisClient) {
+            // Fallback to in-memory
+            return this.fallbackLimiter.check(identifier, config);
+        }
+
+        try {
+            const key = `ratelimit:${identifier}:${config.windowSeconds}`;
+            const now = Date.now();
+            const windowMs = config.windowSeconds * 1000;
+
+            const result = await this.redisClient.eval(
+                this.slidingWindowScript,
+                1,
+                key,
+                now.toString(),
+                windowMs.toString(),
+                config.limit.toString()
+            ) as [number, number, number];
+
+            const [success, remaining, resetAtMs] = result;
+
+            return {
+                success: success === 1,
+                limit: config.limit,
+                remaining,
+                resetAt: new Date(resetAtMs),
+                retryAfterSeconds: success === 0 ? Math.ceil((resetAtMs - now) / 1000) : undefined,
+            };
+        } catch (error) {
+            logger.warn('[RateLimiter] Redis error, falling back to in-memory', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            // Fallback on Redis errors
+            return this.fallbackLimiter.check(identifier, config);
+        }
+    }
+
+    /**
+     * Check if using Redis or fallback.
+     */
+    isUsingRedis(): boolean {
+        return this.initialized && this.redisClient !== null;
+    }
+}
+
+// ============================================================================
+// Rate Limiter Factory
+// ============================================================================
+
+export type RateLimiterType = 'auto' | 'redis' | 'memory';
+
+/**
+ * Factory to get appropriate rate limiter.
+ * 
+ * - 'auto': Use Redis if available, else in-memory
+ * - 'redis': Force Redis (throws if unavailable)
+ * - 'memory': Force in-memory
+ */
+export function getRateLimiter(type: RateLimiterType = 'auto'): InMemoryRateLimiter | RedisRateLimiter {
+    switch (type) {
+        case 'redis':
+            return RedisRateLimiter.getInstance();
+        case 'memory':
+            return InMemoryRateLimiter.getInstance();
+        case 'auto':
+        default:
+            // Prefer Redis when available
+            return RedisRateLimiter.getInstance();
+    }
+}
+
+// ============================================================================
+// Updated Rate Limit Middleware
+// ============================================================================
+
+/**
+ * Rate limit middleware with Redis support.
+ */
+export function withDistributedRateLimit(
+    handler: (req: NextRequest) => Promise<NextResponse>,
+    config: RateLimitConfig = RATE_LIMIT_PRESETS.standard
+): (req: NextRequest) => Promise<NextResponse> {
+    const limiter = RedisRateLimiter.getInstance();
+
+    return async (req: NextRequest) => {
+        const identifier = extractIdentifier(req, config);
+        const result = await limiter.check(identifier, config);
+
+        if (!result.success) {
+            logger.warn('Rate limit exceeded', {
+                identifier: identifier.substring(0, 20),
+                limit: result.limit,
+                retryAfter: result.retryAfterSeconds,
+                backend: limiter.isUsingRedis() ? 'redis' : 'memory',
+            });
+
+            return new NextResponse(
+                JSON.stringify({
+                    error: 'Too Many Requests',
+                    retryAfter: result.retryAfterSeconds,
+                }),
+                {
+                    status: 429,
+                    headers: createRateLimitHeaders(result),
+                }
+            );
+        }
+
+        const response = await handler(req);
+
+        const headers = createRateLimitHeaders(result);
+        for (const [key, value] of headers.entries()) {
+            response.headers.set(key, value);
+        }
+
+        return response;
+    };
+}
+
+// Export singletons
 export const rateLimiter = InMemoryRateLimiter.getInstance();
+export const distributedRateLimiter = RedisRateLimiter.getInstance();

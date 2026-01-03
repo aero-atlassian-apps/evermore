@@ -1,23 +1,29 @@
 # Tech Stack & Dependencies
 
 ## Core Framework
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.x
-- **Styling**: TailwindCSS + Framer Motion (Animations)
+- **Styling**: TailwindCSS + Framer Motion
 - **State Management**: Zustand
+- **Observability**: OpenTelemetry
 
 ## Backend & Database
-- **Database**: PostgreSQL (CockroachDB Serverless)
+- **Database**: Supabase (Postgres) - Managed
 - **ORM**: Drizzle ORM (Schema-first, type-safe)
-- **Caching**: Redis (Upstash) - used for session state and rate limiting
+- **Caching**: Redis (Upstash / Local Docker)
+- **Queues**: In-memory (MMP) -> Temporal (Planned)
 
 ## AI & ML
-- **LLM Provider**: Google Vertex AI (Gemini 1.5 Pro)
-- **Image Generation**: Google Vertex Imagen 2
-- **Embeddings**: Google text-embedding-004
-- **Vector Store**: Pinecone (Serverless)
-- **Speech-to-Text**: Google Cloud Speech / OpenAI Whisper
-- **Text-to-Speech**: ElevenLabs (latency optimized)
+- **Orchestration**: Custom ReAct Agent (EnhancedReActAgent)
+- **Cloud Providers**: 
+    - LLM: Google Vertex AI (Gemini 1.5 Pro)
+    - Image: Google Imagen 3
+    - T2S: ElevenLabs
+- **Local Stack (MMP Feature)**: 
+    - LLM: Ollama (Llama 3 8B)
+    - T2S: Kokoro-FastAPI
+    - S2T: Faster-Whisper
+    - Image: LocalAI (SDXL Turbo)
 
 ## Infrastructure
 - **Deployment**: Vercel (Production) / Docker (Staging)

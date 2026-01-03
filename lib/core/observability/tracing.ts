@@ -4,6 +4,9 @@
  * Provides distributed tracing for production observability.
  * Instruments API routes, LLM calls, speech adapters, and database queries.
  * 
+ * Now integrates with real OpenTelemetry SDK when available.
+ * Falls back to in-memory spans for debugging when OTEL is not configured.
+ * 
  * Usage:
  * ```typescript
  * import { withSpan, startSpan, getTraceId } from '@/lib/core/observability/tracing';
@@ -25,6 +28,14 @@
  */
 
 import { NextRequest } from 'next/server';
+import {
+    isOtelInitialized,
+    getTracer,
+    getCurrentTraceId,
+    SpanKind,
+    SpanStatusCode,
+    type OtelSpan,
+} from './otel-config';
 
 // Types for span-like operations (compatible with OTEL when integrated)
 export interface SpanAttributes {
@@ -38,8 +49,31 @@ export interface Span {
     end(): void;
 }
 
-// In-memory span tracking (replace with OTEL SDK in production)
+// In-memory span tracking (fallback when OTEL not available)
 const activeSpans = new Map<string, { name: string; start: number; attributes: SpanAttributes }>();
+
+/**
+ * Wrap an OTEL span to match our interface.
+ */
+function wrapOtelSpan(otelSpan: OtelSpan): Span {
+    return {
+        setAttribute(key: string, value: string | number | boolean) {
+            otelSpan.setAttribute(key, value);
+        },
+        setStatus(status: 'ok' | 'error', message?: string) {
+            otelSpan.setStatus({
+                code: status === 'ok' ? SpanStatusCode.OK : SpanStatusCode.ERROR,
+                message,
+            });
+        },
+        recordException(error: Error) {
+            otelSpan.recordException(error);
+        },
+        end() {
+            otelSpan.end();
+        },
+    };
+}
 
 /**
  * Extract or generate trace ID from request
@@ -63,9 +97,23 @@ export function createTraceHeaders(traceId: string, parentSpanId?: string): Reco
 }
 
 /**
- * Start a new span
+ * Start a new span - uses OTEL if available, else in-memory fallback.
  */
 export function startSpan(name: string, attributes?: SpanAttributes): Span {
+    // Use OTEL if initialized
+    if (isOtelInitialized()) {
+        try {
+            const tracer = getTracer('evermore');
+            const otelSpan = tracer.startSpan(name, {
+                attributes: attributes as Record<string, string | number | boolean>,
+            });
+            return wrapOtelSpan(otelSpan);
+        } catch {
+            // Fall through to in-memory on error
+        }
+    }
+
+    // Fallback: in-memory span for debugging
     const spanId = crypto.randomUUID();
     const start = Date.now();
 
@@ -102,7 +150,7 @@ export function startSpan(name: string, attributes?: SpanAttributes): Span {
             if (span) {
                 const duration = Date.now() - span.start;
 
-                // Log span (in production, export to OTEL collector)
+                // Log span when OTEL not available
                 if (process.env.NODE_ENV !== 'test') {
                     console.log(JSON.stringify({
                         type: 'span',

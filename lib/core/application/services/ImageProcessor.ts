@@ -1,6 +1,6 @@
 import { ImagePort, ImageAnalysisRequest, ImageAnalysisResult, ImageGenerationRequest, ImageGenerationResult } from '../ports/ImagePort';
 import { WellbeingGuard } from '../agent/safety/WellbeingGuard';
-import { RiskSeverity } from '../agent/safety/WellbeingGuard';
+import { RiskSeverity } from '../agent/safety/types';
 import { EmotionCategory, EmotionIntensity, EmotionalState } from '../agent/persona/EmpathyEngine';
 
 export class ImageProcessor {

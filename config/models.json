@@ -1,0 +1,54 @@
+[
+    {
+        "id": "gemini-2.5-flash-lite",
+        "name": "Gemini 2.5 Flash-Lite",
+        "provider": "google",
+        "tier": "FLASH",
+        "costPer1KInputTokens": 0.05,
+        "costPer1KOutputTokens": 0.15,
+        "maxContextTokens": 1000000,
+        "maxOutputTokens": 8192,
+        "latencyP50Ms": 500,
+        "latencyP95Ms": 1500,
+        "capabilities": [
+            "CLASSIFICATION",
+            "EXTRACTION",
+            "FORMATTING",
+            "SUMMARIZATION",
+            "REASONING",
+            "CREATIVE"
+        ],
+        "qualityScores": {
+            "CLASSIFICATION": 0.9,
+            "EXTRACTION": 0.88,
+            "FORMATTING": 0.92,
+            "SUMMARIZATION": 0.85,
+            "REASONING": 0.82,
+            "CREATIVE": 0.8
+        },
+        "available": true
+    },
+    {
+        "id": "gemini-2.0-flash-lite-preview-02-05",
+        "name": "Gemini 2.0 Flash-Lite (Preview)",
+        "provider": "google",
+        "tier": "FLASH",
+        "costPer1KInputTokens": 0.05,
+        "costPer1KOutputTokens": 0.15,
+        "maxContextTokens": 1000000,
+        "maxOutputTokens": 8192,
+        "latencyP50Ms": 400,
+        "latencyP95Ms": 1200,
+        "capabilities": [
+            "CLASSIFICATION",
+            "EXTRACTION",
+            "FORMATTING"
+        ],
+        "qualityScores": {
+            "CLASSIFICATION": 0.85,
+            "EXTRACTION": 0.8,
+            "FORMATTING": 0.9
+        },
+        "available": true
+    }
+]

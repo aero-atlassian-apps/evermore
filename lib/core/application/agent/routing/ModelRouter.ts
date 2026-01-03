@@ -8,32 +8,9 @@
  */
 
 import { AgentContext } from '../types';
-
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * Task complexity categories.
- */
-export enum TaskComplexity {
-    /** Simple classification tasks */
-    CLASSIFICATION = 'CLASSIFICATION',
-    /** Entity/information extraction */
-    EXTRACTION = 'EXTRACTION',
-    /** Complex reasoning tasks */
-    REASONING = 'REASONING',
-    /** Creative content generation */
-    CREATIVE = 'CREATIVE',
-    /** Safety-critical tasks requiring high accuracy */
-    SAFETY_CRITICAL = 'SAFETY_CRITICAL',
-    /** Simple text formatting/transformation */
-    FORMATTING = 'FORMATTING',
-    /** Summarization tasks */
-    SUMMARIZATION = 'SUMMARIZATION',
-    /** Code generation */
-    CODE = 'CODE',
-}
+import { TaskComplexity } from '../primitives/AgentPrimitives';
+export { TaskComplexity };
+import { ABTestingFramework } from '../evaluation/ABTestingFramework';
 
 /**
  * Model capability tier.
@@ -119,6 +96,10 @@ export interface RoutingDecision {
     model: ModelConfig;
     /** Reason for selection */
     reason: string;
+    /** Whether this is an experiment variant */
+    experimentVariant?: 'baseline' | 'challenger';
+    /** Experiment ID if applicable */
+    experimentId?: string;
 }
 
 // ============================================================================
@@ -186,12 +167,54 @@ export const DEFAULT_MODELS: ModelConfig[] = [
 
 export class ModelRouter {
     private models: Map<string, ModelConfig> = new Map();
+    // Learning Pipeline Integration (100M Roadmap - Phase 3)
+    private abTestingFramework: ABTestingFramework;
+    private candidateErrorCount: number = 0;
+    private candidateRequestCount: number = 0;
+    private readonly CANDIDATE_CIRCUIT_BREAKER_THRESHOLD = 0.05; // 5% error rate
 
-    constructor(models: ModelConfig[] = DEFAULT_MODELS) {
+    constructor(models: ModelConfig[] = DEFAULT_MODELS, abFramework?: ABTestingFramework) {
         for (const m of models) {
             this.models.set(m.id, m);
         }
+        this.abTestingFramework = abFramework || new ABTestingFramework();
     }
+
+    /**
+     * Load model configuration from a JSON registry file.
+     * Updates existing models and adds new ones.
+     */
+    async loadRegistry(registryPath: string): Promise<void> {
+        try {
+            // Lazy import fs to avoid issues in non-node environments if reused
+            const fs = await import('fs');
+
+            if (fs.existsSync(registryPath)) {
+                const content = fs.readFileSync(registryPath, 'utf-8');
+                const loadedModels = JSON.parse(content) as ModelConfig[];
+
+                let loadedCount = 0;
+                for (const model of loadedModels) {
+                    this.registerModel(model);
+                    loadedCount++;
+                }
+                console.log(`[ModelRouter] Loaded ${loadedCount} models from registry: ${registryPath}`);
+            } else {
+                console.warn(`[ModelRouter] Registry file not found: ${registryPath}`);
+            }
+        } catch (error) {
+            console.error('[ModelRouter] Failed to load registry:', error);
+        }
+    }
+
+    /**
+     * Register or update a model configuration dynamically.
+     */
+    registerModel(config: ModelConfig): void {
+        this.models.set(config.id, config);
+        // Clean up fallback/defaults if needed, or just overwrite
+    }
+
 
     /**
      * Analyze a prompt to determine its complexity.
@@ -231,8 +254,49 @@ export class ModelRouter {
     /**
      * Select the best model based on task and budget.
      */
-    route(task: TaskComplexity, budget: RoutingBudget): RoutingDecision {
+    route(task: TaskComplexity, budget: RoutingBudget, userId?: string): RoutingDecision {
         const candidates = Array.from(this.models.values()).filter(m => m.available);
+
+        // Learning Pipeline Integration (100M Roadmap - Phase 3): A/B Experiment Routing
+        const activeExperiment = this.abTestingFramework.getActiveExperiment();
+        if (activeExperiment && userId) {
+            const { id: experimentId, experiment } = activeExperiment;
+
+            // Circuit Breaker: Check if candidate error rate exceeds threshold
+            const candidateErrorRate = this.candidateRequestCount > 10
+                ? this.candidateErrorCount / this.candidateRequestCount
+                : 0;
+
+            if (candidateErrorRate >= this.CANDIDATE_CIRCUIT_BREAKER_THRESHOLD) {
+                console.warn(`[ModelRouter] Circuit breaker tripped! Candidate error rate: ${(candidateErrorRate * 100).toFixed(1)}%`);
+                // Force baseline
+                const baselineModel = this.models.get(experiment.config.baselineModel);
+                if (baselineModel) {
+                    return {
+                        modelId: baselineModel.id,
+                        model: baselineModel,
+                        reason: 'Circuit breaker: Candidate model error rate exceeded 5%',
+                    };
+                }
+            }
+
+            // Route via A/B framework
+            const variant = this.abTestingFramework.routeRequest(experimentId, userId);
+            const modelId = variant === 'challenger'
+                ? experiment.config.challengerModel
+                : experiment.config.baselineModel;
+
+            const selectedModel = this.models.get(modelId);
+            if (selectedModel) {
+                return {
+                    modelId: selectedModel.id,
+                    model: selectedModel,
+                    reason: `A/B Experiment: ${experiment.config.name} - ${variant}`,
+                    experimentVariant: variant,
+                    experimentId,
+                };
+            }
+        }
 
         // Filter by quality
         const filtered = candidates.filter(m => (m.qualityScores[task] || 0) >= (budget.minQuality || 0));
@@ -266,5 +330,24 @@ export class ModelRouter {
             model: best,
             reason: `Optimized for ${task} with quality ${best.qualityScores[task] || 'N/A'}`
         };
+    }
+
+    /**
+     * Record outcome for circuit breaker tracking.
+     * Call this after each request to track candidate model health.
+     */
+    recordCandidateOutcome(success: boolean): void {
+        this.candidateRequestCount++;
+        if (!success) {
+            this.candidateErrorCount++;
+        }
+    }
+
+    /**
+     * Reset circuit breaker counters (e.g., after deploying a new candidate).
+     */
+    resetCircuitBreaker(): void {
+        this.candidateErrorCount = 0;
+        this.candidateRequestCount = 0;
     }
 }

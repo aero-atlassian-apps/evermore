@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signSession } from '@/lib/auth/jwt';
+import { UserRole } from '@/lib/auth/roles';
 import { LoginSchema } from '@/lib/core/application/schemas';
 
 export async function POST(req: NextRequest) {
@@ -109,7 +110,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to resolve user' }, { status: 500 });
     }
 
-    const token = await signSession({ userId: finalUserId, role: finalRole });
+    const token = await signSession({
+      userId: finalUserId,
+      role: finalRole as UserRole
+    });
 
     const response = NextResponse.json({ success: true, userId: finalUserId, role: finalRole });
 

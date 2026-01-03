@@ -210,6 +210,34 @@ export const DEFAULT_MODELS: ModelConfig[] = [
         },
         available: false, // Mark as false if it 404s
         rateLimitRPM: 2,
+    },
+    // DPO Fine-tuned model for elder care - enabled after training
+    {
+        id: 'gemini-2.5-flash-dpo-tuned',
+        name: 'Gemini 2.5 Flash (DPO Elder Care)',
+        provider: 'google',
+        tier: ModelTier.STANDARD,
+        costPer1KInputTokens: 0.08, // Slightly higher due to custom endpoint
+        costPer1KOutputTokens: 0.20,
+        maxContextTokens: 1000000,
+        maxOutputTokens: 8192,
+        latencyP50Ms: 600,
+        latencyP95Ms: 1800,
+        capabilities: [
+            TaskComplexity.REASONING,
+            TaskComplexity.CREATIVE,
+            TaskComplexity.CLASSIFICATION,
+            TaskComplexity.SUMMARIZATION,
+        ],
+        qualityScores: {
+            // Enhanced scores for elder care after DPO training
+            [TaskComplexity.REASONING]: 0.92, // +10% from base
+            [TaskComplexity.CREATIVE]: 0.90,  // +10% from base
+            [TaskComplexity.CLASSIFICATION]: 0.92,
+            [TaskComplexity.SUMMARIZATION]: 0.90,
+        },
+        available: false, // Enable after DPO training completes
+        rateLimitRPM: 20,
     }
 ];
 

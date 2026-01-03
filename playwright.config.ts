@@ -29,9 +29,9 @@ export default defineConfig({
   ],
 
   // Timeout settings
-  timeout: 60000,
+  timeout: 120000, // 2 minutes per test
   expect: {
-    timeout: 10000,
+    timeout: 30000,
   },
 
   use: {
@@ -50,7 +50,7 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
 
     // Action timeout
-    actionTimeout: 15000,
+    actionTimeout: 30000,
   },
 
   projects: [

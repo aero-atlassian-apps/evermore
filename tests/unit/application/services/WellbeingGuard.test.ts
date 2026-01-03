@@ -11,11 +11,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
     WellbeingGuard,
+} from '../../../../lib/core/application/agent/safety/WellbeingGuard';
+import {
     RiskSeverity,
     WellbeingConcern,
-    ResponseType,
     ScamType,
-} from '@/lib/core/application/agent/safety/WellbeingGuard';
+    ActionType,
+    ResponseType
+} from '../../../../lib/core/application/agent/safety/types';
 
 describe('WellbeingGuard Escalation Tests', () => {
     let guard: WellbeingGuard;

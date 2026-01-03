@@ -51,7 +51,7 @@ Evermore is not a chatbot. It is an agentic AI system with:
 
 | Canvas | Purpose |
 |--------|---------|
-| [Product Canvas](./04_execution_tactical/product_canvas.md) | Current MVP scope |
+| [Product Canvas](./04_execution_tactical/product_canvas.md) | MMP scope & roadmap |
 | [User Story Mapping](./04_execution_tactical/user_story_mapping.md) | Feature prioritization by release |
 | [Experiment Canvas](./04_execution_tactical/experiment_canvas.md) | Validation experiments |
 
@@ -64,19 +64,17 @@ Evermore is not a chatbot. It is an agentic AI system with:
 
 ### Phase 6: Technical Architecture
 
-| Canvas | Purpose |
-|--------|---------|
-| [Cognitive Architecture Canvas](./06_technical/cognitive_architecture_canvas.md) | How the agent reasons (FSM, ReAct, AoT) |
-| [Context and Memory Canvas](./06_technical/context_memory_canvas.md) | Memory tiers, RAG strategy |
-| [Prompt Engineering Canvas](./06_technical/prompt_engineering_canvas.md) | Persona, anti-patterns, output contracts |
-| [Clean Architecture Canvas](./06_technical/clean_architecture_canvas.md) | DDD, ports, adapters |
-| [Security and Guardrails Canvas](./06_technical/security_guardrails_canvas.md) | Safety systems, threat model |
-| [Observability Canvas](./06_technical/observability_canvas.md) | Tracing, monitoring, evaluation |
-| [FinOps Canvas](./06_technical/finops_canvas.md) | Model routing, cost control |
-| [Multimodal Infrastructure Canvas](./06_technical/multimodal_infrastructure_canvas.md) | Audio, vision, deployment |
+| Artifact | Purpose |
+|----------|---------|
+| [Tech Stack & Architecture](../TECHNICAL/01_tech_stack.md) | Core stack, Clean Architecture, MMP status |
+| [Prompt Engineering Guide](../TECHNICAL/03_prompting_guide.md) | Persona, anti-patterns, output contracts |
+| [Multi-Modal Pipeline](../TECHNICAL/06_multimodal_pipeline.md) | Audio, vision, and voice processing |
+| [Observability & Tracing](../TECHNICAL/05_observability_and_trace.md) | Tracing, monitoring using OpenTelemetry |
+| [Latency & Performance](../TECHNICAL/04_latency_and_performance.md) | Optimization strategies |
+| [External Services](../TECHNICAL/02_external_services.md) | Third-party integrations |
 
 ---
 
 ## Version
 
-December 2024. This documentation supersedes all prior product artifacts.
+January 2026. This documentation reflects the MMP (Minimal Marketable Product) status and roadmap.

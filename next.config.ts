@@ -4,6 +4,13 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   webpack: (config) => {
     // Explicitly using webpack config forces Next.js to use Webpack
+
+    // Suppress OpenTelemetry critical dependency warning (benign)
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      { module: /@opentelemetry\/instrumentation/, message: /Critical dependency/ },
+    ];
+
     return config;
   },
   images: {

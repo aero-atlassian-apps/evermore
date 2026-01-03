@@ -1,0 +1,41 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "description": "Performance budget configuration for Evermore",
+    "version": "1.0.0",
+    "budgets": {
+        "javascript": {
+            "maxSizeKb": 500,
+            "description": "Total JavaScript bundle size (first load)"
+        },
+        "css": {
+            "maxSizeKb": 100,
+            "description": "Total CSS bundle size"
+        },
+        "firstLoad": {
+            "maxSizeKb": 600,
+            "description": "Total first load JS (shared + page-specific)"
+        }
+    },
+    "routeBudgets": {
+        "/": {
+            "maxSizeKb": 150,
+            "description": "Landing page"
+        },
+        "/dashboard": {
+            "maxSizeKb": 200,
+            "description": "Senior dashboard"
+        },
+        "/talk": {
+            "maxSizeKb": 250,
+            "description": "Voice conversation page"
+        }
+    },
+    "buildTime": {
+        "maxDurationSeconds": 300,
+        "description": "Maximum build time"
+    },
+    "thresholds": {
+        "warningPercentage": 80,
+        "errorOnExceed": true
+    }
+}

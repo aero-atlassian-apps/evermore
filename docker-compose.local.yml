@@ -1,0 +1,282 @@
+# Docker Compose - LOCAL DEVELOPMENT WITH AI STACK
+#
+# ✅ FULLY LOCAL - No cloud API keys required
+# ✅ PRIVACY FIRST - All data stays on your machine
+# ✅ COST: $0 - Run your own AI
+#
+# Usage: docker-compose -f docker-compose.local.yml up
+#
+# Requirements:
+# - 16GB RAM minimum
+# - Docker with 12GB+ memory allocation
+# - ~15GB disk space for models
+#
+# Services:
+# - app: Next.js application
+# - db: PostgreSQL database
+# - redis: Session state & caching
+# - ollama: Local LLM (Llama-3-8B)
+# - whisper: Speech-to-Text (Faster-Whisper)
+# - kokoro: Text-to-Speech (Kokoro-FastAPI)
+# - localai: Image generation (SDXL-Turbo)
+
+services:
+  # ===========================================================================
+  # Core Application
+  # ===========================================================================
+  
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: evermore_app
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    ports:
+      - "3000:3000"
+    environment:
+      # Database
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/evermore_mvp
+      - DB_PROVIDER=postgres
+      
+      # Provider Selection (LOCAL)
+      - LLM_PROVIDER=local
+      - TTS_PROVIDER=local
+      - STT_PROVIDER=local
+      - IMAGE_PROVIDER=local
+      
+      # Local AI Service URLs
+      - OLLAMA_URL=http://ollama:11434
+      - WHISPER_URL=http://whisper:9000
+      - KOKORO_URL=http://kokoro:8880
+      - LOCALAI_URL=http://localai:8080
+      
+      # Vector Store (In-Memory for local)
+      - VECTOR_STORE=memory
+      
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      
+      # Development
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - USE_MOCKS=false
+      
+      # Security (dev only)
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-prod}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-dev-nextauth-secret}
+      - NEXTAUTH_URL=http://localhost:3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - evermore_network
+    command: >
+      sh -c "
+        echo '🚀 Running database migrations...' &&
+        npm run db:push &&
+        echo '🌱 Seeding database...' &&
+        npm run seed || true &&
+        echo '✅ Starting Evermore MVP (Local AI Mode)...' &&
+        npm run dev
+      "
+
+  # ===========================================================================
+  # Database Layer
+  # ===========================================================================
+  
+  db:
+    image: postgres:15-alpine
+    container_name: evermore_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: evermore_mvp
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - evermore_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: evermore_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - evermore_network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # ===========================================================================
+  # LOCAL AI STACK
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # Ollama - Local LLM Server (Llama-3-8B-Instruct)
+  # ---------------------------------------------------------------------------
+  # Provides OpenAI-compatible API at /v1/chat/completions
+  # RAM: ~6GB for Llama-3-8B quantized
+  ollama:
+    image: ollama/ollama:latest
+    container_name: evermore_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - evermore_network
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # Pre-pull the model on startup
+    entrypoint: >
+      sh -c "
+        ollama serve &
+        sleep 5 &&
+        ollama pull llama3:8b-instruct-q4_0 &&
+        wait
+      "
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+  # ---------------------------------------------------------------------------
+  # Faster-Whisper - Speech-to-Text
+  # ---------------------------------------------------------------------------
+  # OpenAI Whisper-compatible API
+  # RAM: ~1GB for tiny/base model
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: evermore_whisper
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    networks:
+      - evermore_network
+    environment:
+      - ASR_MODEL=base
+      - ASR_ENGINE=faster_whisper
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # Kokoro-FastAPI - Text-to-Speech
+  # ---------------------------------------------------------------------------
+  # ElevenLabs-compatible API
+  # RAM: ~1.5GB
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: evermore_kokoro
+    restart: unless-stopped
+    ports:
+      - "8880:8880"
+    networks:
+      - evermore_network
+    environment:
+      - KOKORO_MODEL=kokoro-v0_19
+    volumes:
+      - kokoro_data:/app/models
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # LocalAI - Image Generation (SDXL-Turbo)
+  # ---------------------------------------------------------------------------
+  # OpenAI Images-compatible API
+  # RAM: ~4GB for SDXL-Turbo
+  # Note: Image generation takes 30-60s on CPU
+  localai:
+    image: localai/localai:latest-cpu
+    container_name: evermore_localai
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - localai_data:/build/models
+    networks:
+      - evermore_network
+    environment:
+      - THREADS=4
+      - CONTEXT_SIZE=2048
+    # Pre-download SDXL-Turbo on startup
+    command: >
+      sh -c "
+        local-ai &
+        sleep 10 &&
+        curl -X POST http://localhost:8080/models/apply -H 'Content-Type: application/json' -d '{\"id\": \"stablediffusion-turbo\"}' || true &&
+        wait
+      "
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+
+  # ===========================================================================
+  # Development Tools (Optional)
+  # ===========================================================================
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: evermore_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@evermore.dev
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    networks:
+      - evermore_network
+    depends_on:
+      - db
+    profiles:
+      - tools
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: evermore_mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - evermore_network
+    profiles:
+      - tools
+
+networks:
+  evermore_network:
+    driver: bridge
+
+volumes:
+  db_data:
+  redis_data:
+  ollama_data:
+  kokoro_data:
+  localai_data:

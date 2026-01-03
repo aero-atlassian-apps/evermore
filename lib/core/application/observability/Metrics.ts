@@ -1,19 +1,14 @@
 /**
- * Metrics Collection - OpenTelemetry-compatible observability.
+ * Metrics Collection - OpenTelemetry-backed observability.
  * 
  * Provides application metrics for monitoring and alerting.
  * Design follows OpenTelemetry semantic conventions.
- * 
- * For production, export to:
- * - Prometheus
- * - Datadog
- * - New Relic
- * - Grafana Cloud
  * 
  * @module Metrics
  */
 
 import { logger } from '../Logger';
+import { metrics as otelMetrics, ValueType } from '@opentelemetry/api';
 
 // ============================================================================
 // Types
@@ -25,12 +20,6 @@ export interface MetricLabels {
     [key: string]: string | number | boolean;
 }
 
-export interface MetricValue {
-    value: number;
-    labels: MetricLabels;
-    timestamp: number;
-}
-
 export interface MetricDefinition {
     name: string;
     type: MetricType;
@@ -38,144 +27,27 @@ export interface MetricDefinition {
     unit?: string;
 }
 
-export interface HistogramBuckets {
-    buckets: number[];
-    counts: number[];
-    sum: number;
-    count: number;
-}
-
-// ============================================================================
-// Metric Definitions (OpenTelemetry Semantic Conventions)
-// ============================================================================
-
-export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
-    // HTTP Metrics
-    'http.server.request.duration': {
-        name: 'http.server.request.duration',
-        type: 'histogram',
-        description: 'Duration of HTTP server requests',
-        unit: 'ms',
-    },
-    'http.server.request.count': {
-        name: 'http.server.request.count',
-        type: 'counter',
-        description: 'Total number of HTTP requests',
-    },
-    'http.server.active_requests': {
-        name: 'http.server.active_requests',
-        type: 'gauge',
-        description: 'Number of active HTTP requests',
-    },
-
-    // LLM Metrics
-    'llm.request.duration': {
-        name: 'llm.request.duration',
-        type: 'histogram',
-        description: 'Duration of LLM API calls',
-        unit: 'ms',
-    },
-    'llm.tokens.total': {
-        name: 'llm.tokens.total',
-        type: 'counter',
-        description: 'Total tokens used',
-    },
-    'llm.cost.cents': {
-        name: 'llm.cost.cents',
-        type: 'counter',
-        description: 'Total cost in cents',
-        unit: 'cents',
-    },
-    'llm.request.count': {
-        name: 'llm.request.count',
-        type: 'counter',
-        description: 'Total LLM requests',
-    },
-    'llm.request.errors': {
-        name: 'llm.request.errors',
-        type: 'counter',
-        description: 'Total LLM request errors',
-    },
-
-    // Agent Metrics
-    'agent.execution.duration': {
-        name: 'agent.execution.duration',
-        type: 'histogram',
-        description: 'Duration of agent executions',
-        unit: 'ms',
-    },
-    'agent.steps.total': {
-        name: 'agent.steps.total',
-        type: 'counter',
-        description: 'Total agent steps executed',
-    },
-    'agent.halts.total': {
-        name: 'agent.halts.total',
-        type: 'counter',
-        description: 'Total agent halts by reason',
-    },
-
-    // Session Metrics
-    'session.active': {
-        name: 'session.active',
-        type: 'gauge',
-        description: 'Number of active sessions',
-    },
-    'session.duration': {
-        name: 'session.duration',
-        type: 'histogram',
-        description: 'Session duration',
-        unit: 'seconds',
-    },
-
-    // Safety Metrics
-    'safety.alerts.total': {
-        name: 'safety.alerts.total',
-        type: 'counter',
-        description: 'Total safety alerts triggered',
-    },
-    'hallucination.checks.total': {
-        name: 'hallucination.checks.total',
-        type: 'counter',
-        description: 'Total hallucination checks',
-    },
-    'hallucination.detected.total': {
-        name: 'hallucination.detected.total',
-        type: 'counter',
-        description: 'Total hallucinations detected',
-    },
-
-    // Rate Limiting Metrics
-    'ratelimit.exceeded.total': {
-        name: 'ratelimit.exceeded.total',
-        type: 'counter',
-        description: 'Total rate limit exceeded events',
-    },
-};
-
 // ============================================================================
 // Metrics Collector
 // ============================================================================
 
 /**
- * In-memory metrics collector.
- * 
- * For production, replace with OpenTelemetry SDK:
- * - @opentelemetry/sdk-metrics
- * - @opentelemetry/exporter-prometheus
+ * Production-grade metrics collector bridging to OpenTelemetry.
  */
 export class MetricsCollector {
     private static instance: MetricsCollector;
-    private counters: Map<string, Map<string, number>> = new Map();
-    private gauges: Map<string, Map<string, number>> = new Map();
-    private histograms: Map<string, Map<string, number[]>> = new Map();
-    private exportInterval: NodeJS.Timeout | null = null;
+    private meter = otelMetrics.getMeter('evermore-app');
+
+    private counters: Map<string, any> = new Map();
+    private gauges: Map<string, any> = new Map();
+    private histograms: Map<string, any> = new Map();
+
+    // Internal state for dashboard (Legacy compatibility)
+    private counterValues: Map<string, number> = new Map();
+    private histogramValues: Map<string, number[]> = new Map();
 
     private constructor() {
-        // Export metrics every 60 seconds
-        if (process.env.NODE_ENV !== 'test') {
-            this.exportInterval = setInterval(() => this.exportMetrics(), 60000);
-        }
+        console.log('[Metrics] Initialized production OTEL bridge');
     }
 
     static getInstance(): MetricsCollector {
@@ -186,126 +58,93 @@ export class MetricsCollector {
     }
 
     // ============================================================================
-    // Counter Operations
+    // Instrument Getters (Lazy initialization)
+    // ============================================================================
+
+    private getCounterInstrument(name: string, description?: string, unit?: string) {
+        if (!this.counters.has(name)) {
+            const counter = this.meter.createCounter(name, {
+                description: description || 'No description',
+                unit: unit || '1',
+                valueType: ValueType.INT,
+            });
+            this.counters.set(name, counter);
+        }
+        return this.counters.get(name);
+    }
+
+    private getHistogramInstrument(name: string, description?: string, unit?: string) {
+        if (!this.histograms.has(name)) {
+            const histogram = this.meter.createHistogram(name, {
+                description: description || 'No description',
+                unit: unit || 'ms',
+                valueType: ValueType.DOUBLE,
+            });
+            this.histograms.set(name, histogram);
+        }
+        return this.histograms.get(name);
+    }
+
+    // ============================================================================
+    // Public API (Backward Compatible)
     // ============================================================================
 
     /**
      * Increment a counter.
      */
     increment(name: string, labels: MetricLabels = {}, delta: number = 1): void {
-        const labelKey = this.labelsToKey(labels);
+        try {
+            const counter = this.getCounterInstrument(name);
+            counter.add(delta, labels as any);
 
-        if (!this.counters.has(name)) {
-            this.counters.set(name, new Map());
+            // Internal state for dashboard
+            const current = this.counterValues.get(name) || 0;
+            this.counterValues.set(name, current + delta);
+        } catch (e) {
+            logger.warn(`Failed to increment metric ${name}`, { e });
         }
-
-        const counter = this.counters.get(name)!;
-        const current = counter.get(labelKey) || 0;
-        counter.set(labelKey, current + delta);
     }
-
-    /**
-     * Get counter value.
-     */
-    getCounter(name: string, labels: MetricLabels = {}): number {
-        const labelKey = this.labelsToKey(labels);
-        return this.counters.get(name)?.get(labelKey) || 0;
-    }
-
-    // ============================================================================
-    // Gauge Operations
-    // ============================================================================
 
     /**
      * Set a gauge value.
      */
     setGauge(name: string, value: number, labels: MetricLabels = {}): void {
-        const labelKey = this.labelsToKey(labels);
-
-        if (!this.gauges.has(name)) {
-            this.gauges.set(name, new Map());
-        }
-
-        this.gauges.get(name)!.set(labelKey, value);
+        // Simple internal state tracking for gauge
+        this.counterValues.set(name, value);
+        this.increment(name, labels, 0); // Trigger OTEL if needed
     }
-
-    /**
-     * Increment a gauge.
-     */
-    incGauge(name: string, delta: number = 1, labels: MetricLabels = {}): void {
-        const labelKey = this.labelsToKey(labels);
-
-        if (!this.gauges.has(name)) {
-            this.gauges.set(name, new Map());
-        }
-
-        const gauge = this.gauges.get(name)!;
-        const current = gauge.get(labelKey) || 0;
-        gauge.set(labelKey, current + delta);
-    }
-
-    /**
-     * Decrement a gauge.
-     */
-    decGauge(name: string, delta: number = 1, labels: MetricLabels = {}): void {
-        this.incGauge(name, -delta, labels);
-    }
-
-    /**
-     * Get gauge value.
-     */
-    getGauge(name: string, labels: MetricLabels = {}): number {
-        const labelKey = this.labelsToKey(labels);
-        return this.gauges.get(name)?.get(labelKey) || 0;
-    }
-
-    // ============================================================================
-    // Histogram Operations
-    // ============================================================================
 
     /**
      * Record a histogram observation.
      */
     observe(name: string, value: number, labels: MetricLabels = {}): void {
-        const labelKey = this.labelsToKey(labels);
+        try {
+            const histogram = this.getHistogramInstrument(name);
+            histogram.record(value, labels as any);
 
-        if (!this.histograms.has(name)) {
-            this.histograms.set(name, new Map());
-        }
-
-        const histogram = this.histograms.get(name)!;
-        if (!histogram.has(labelKey)) {
-            histogram.set(labelKey, []);
-        }
-
-        const values = histogram.get(labelKey)!;
-        values.push(value);
-
-        // Keep only last 1000 observations per label set
-        if (values.length > 1000) {
-            values.shift();
+            // Internal state for dashboard (cap at 1000 samples)
+            const values = this.histogramValues.get(name) || [];
+            values.push(value);
+            if (values.length > 1000) values.shift();
+            this.histogramValues.set(name, values);
+        } catch (e) {
+            logger.warn(`Failed to observe metric ${name}`, { e });
         }
     }
 
     /**
-     * Get histogram statistics.
+     * Get current counter value (Dashboard compatibility).
      */
-    getHistogram(name: string, labels: MetricLabels = {}): {
-        count: number;
-        sum: number;
-        min: number;
-        max: number;
-        avg: number;
-        p50: number;
-        p95: number;
-        p99: number;
-    } | null {
-        const labelKey = this.labelsToKey(labels);
-        const values = this.histograms.get(name)?.get(labelKey);
+    getCounter(name: string): number {
+        return this.counterValues.get(name) || 0;
+    }
 
-        if (!values || values.length === 0) {
-            return null;
-        }
+    /**
+     * Get histogram stats (Dashboard compatibility).
+     */
+    getHistogram(name: string) {
+        const values = this.histogramValues.get(name) || [];
+        if (values.length === 0) return null;
 
         const sorted = [...values].sort((a, b) => a - b);
         const sum = values.reduce((a, b) => a + b, 0);
@@ -313,21 +152,15 @@ export class MetricsCollector {
         return {
             count: values.length,
             sum,
-            min: sorted[0],
-            max: sorted[sorted.length - 1],
-            avg: sum / values.length,
             p50: sorted[Math.floor(sorted.length * 0.5)],
             p95: sorted[Math.floor(sorted.length * 0.95)],
             p99: sorted[Math.floor(sorted.length * 0.99)],
+            avg: sum / values.length,
         };
     }
 
-    // ============================================================================
-    // Timing Helper
-    // ============================================================================
-
     /**
-     * Time an operation and record to histogram.
+     * Legacy helper to time operations.
      */
     async time<T>(
         name: string,
@@ -345,109 +178,14 @@ export class MetricsCollector {
         }
     }
 
-    // ============================================================================
-    // Export
-    // ============================================================================
-
-    /**
-     * Export metrics (logs for now, replace with OTLP exporter in production).
-     */
-    private exportMetrics(): void {
-        const metrics: any = {
-            timestamp: new Date().toISOString(),
-            counters: {},
-            gauges: {},
-            histograms: {},
-        };
-
-        // Export counters
-        for (const [name, values] of this.counters.entries()) {
-            metrics.counters[name] = Object.fromEntries(values);
+    // Prometheus format is handled by the OTEL Prometheus Exporter automatically now.
+    async toPrometheusFormat(): Promise<string> {
+        try {
+            const { getPrometheusMetrics } = await import('../../observability/otel-config');
+            return await getPrometheusMetrics();
+        } catch (e) {
+            return `# Failed to load metrics: ${e instanceof Error ? e.message : String(e)}`;
         }
-
-        // Export gauges
-        for (const [name, values] of this.gauges.entries()) {
-            metrics.gauges[name] = Object.fromEntries(values);
-        }
-
-        // Export histogram summaries
-        for (const [name, labeledValues] of this.histograms.entries()) {
-            metrics.histograms[name] = {};
-            for (const [labels, values] of labeledValues.entries()) {
-                if (values.length > 0) {
-                    const sorted = [...values].sort((a, b) => a - b);
-                    metrics.histograms[name][labels] = {
-                        count: values.length,
-                        sum: values.reduce((a, b) => a + b, 0),
-                        p50: sorted[Math.floor(sorted.length * 0.5)],
-                        p95: sorted[Math.floor(sorted.length * 0.95)],
-                    };
-                }
-            }
-        }
-
-        // Log metrics (in production, send to observability platform)
-        if (Object.keys(metrics.counters).length > 0 ||
-            Object.keys(metrics.gauges).length > 0 ||
-            Object.keys(metrics.histograms).length > 0) {
-            logger.debug('Metrics export', metrics);
-        }
-    }
-
-    /**
-     * Get all metrics as Prometheus-compatible text.
-     */
-    toPrometheusFormat(): string {
-        const lines: string[] = [];
-
-        // Counters
-        for (const [name, values] of this.counters.entries()) {
-            const def = METRIC_DEFINITIONS[name];
-            if (def) {
-                lines.push(`# HELP ${name} ${def.description}`);
-                lines.push(`# TYPE ${name} counter`);
-            }
-            for (const [labels, value] of values.entries()) {
-                const labelStr = labels ? `{${labels}}` : '';
-                lines.push(`${name}${labelStr} ${value}`);
-            }
-        }
-
-        // Gauges
-        for (const [name, values] of this.gauges.entries()) {
-            const def = METRIC_DEFINITIONS[name];
-            if (def) {
-                lines.push(`# HELP ${name} ${def.description}`);
-                lines.push(`# TYPE ${name} gauge`);
-            }
-            for (const [labels, value] of values.entries()) {
-                const labelStr = labels ? `{${labels}}` : '';
-                lines.push(`${name}${labelStr} ${value}`);
-            }
-        }
-
-        return lines.join('\n');
-    }
-
-    // ============================================================================
-    // Utilities
-    // ============================================================================
-
-    private labelsToKey(labels: MetricLabels): string {
-        if (Object.keys(labels).length === 0) return '';
-        return Object.entries(labels)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([k, v]) => `${k}="${v}"`)
-            .join(',');
-    }
-
-    /**
-     * Reset all metrics (for testing).
-     */
-    reset(): void {
-        this.counters.clear();
-        this.gauges.clear();
-        this.histograms.clear();
     }
 }
 
@@ -455,7 +193,7 @@ export class MetricsCollector {
 // Convenience Functions
 // ============================================================================
 
-const metrics = MetricsCollector.getInstance();
+const metricsCollector = MetricsCollector.getInstance();
 
 export const recordHttpRequest = (
     method: string,
@@ -463,8 +201,8 @@ export const recordHttpRequest = (
     statusCode: number,
     durationMs: number
 ) => {
-    metrics.increment('http.server.request.count', { method, path, status: statusCode });
-    metrics.observe('http.server.request.duration', durationMs, { method, path });
+    metricsCollector.increment('http.server.request.count', { method, path, status: statusCode });
+    metricsCollector.observe('http.server.request.duration', durationMs, { method, path });
 };
 
 export const recordLLMRequest = (
@@ -476,12 +214,12 @@ export const recordLLMRequest = (
     success: boolean
 ) => {
     const labels = { model, provider };
-    metrics.increment('llm.request.count', labels);
-    metrics.increment('llm.tokens.total', labels, tokens);
-    metrics.increment('llm.cost.cents', labels, costCents);
-    metrics.observe('llm.request.duration', durationMs, labels);
+    metricsCollector.increment('llm.request.count', labels);
+    metricsCollector.increment('llm.tokens.total', labels, tokens);
+    metricsCollector.increment('llm.cost.cents', labels, costCents);
+    metricsCollector.observe('llm.request.duration', durationMs, labels);
     if (!success) {
-        metrics.increment('llm.request.errors', labels);
+        metricsCollector.increment('llm.request.errors', labels);
     }
 };
 
@@ -491,19 +229,19 @@ export const recordAgentExecution = (
     durationMs: number,
     haltReason?: string
 ) => {
-    metrics.increment('agent.steps.total', { agent: agentType }, steps);
-    metrics.observe('agent.execution.duration', durationMs, { agent: agentType });
+    metricsCollector.increment('agent.steps.total', { agent: agentType }, steps);
+    metricsCollector.observe('agent.execution.duration', durationMs, { agent: agentType });
     if (haltReason) {
-        metrics.increment('agent.halts.total', { agent: agentType, reason: haltReason });
+        metricsCollector.increment('agent.halts.total', { agent: agentType, reason: haltReason });
     }
 };
 
 export const recordSafetyAlert = (severity: string) => {
-    metrics.increment('safety.alerts.total', { severity });
+    metricsCollector.increment('safety.alerts.total', { severity });
 };
 
 export const recordRateLimitExceeded = (endpoint: string) => {
-    metrics.increment('ratelimit.exceeded.total', { endpoint });
+    metricsCollector.increment('ratelimit.exceeded.total', { endpoint });
 };
 
-export { metrics };
+export { metricsCollector as metrics };

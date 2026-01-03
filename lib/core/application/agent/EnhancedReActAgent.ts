@@ -8,6 +8,8 @@
  */
 
 import { LLMPort } from '../ports/LLMPort';
+import { VectorStorePort } from '../ports/VectorStorePort';
+import { EmbeddingPort } from '../ports/EmbeddingPort';
 import { AgentStep, Tool, AgentContext } from './types';
 import { AgentStateMachine, StateMachineContext } from './state/AgentStateMachine';
 import { AgentLoopMonitor, StepMetrics } from './monitoring/AgentLoopMonitor';
@@ -15,9 +17,10 @@ import { EnhancedAgentTracer } from './EnhancedAgentTracer';
 import { ContextBudgetManager } from './context/ContextBudgetManager';
 import { ContextOptimizer } from './context/ContextOptimizer';
 import { PromptRegistry, createDefaultPromptRegistry } from './prompts/PromptRegistry';
-import { ToolRegistry } from './tools/ToolContracts'; // Import ToolRegistry
-import { JsonParser } from '../utils/JsonParser'; // Import JsonParser
-import { logger } from '../../../infrastructure/logging/LoggerService'; // Import LoggerService
+import { ToolRegistry } from './tools/ToolContracts';
+import { JsonParser } from '../utils/JsonParser';
+import { logger } from '../../../infrastructure/logging/LoggerService';
+import { ModelRouter, ModelProfile } from './routing/ModelRouter';
 import {
     AgenticRunnerConfig,
     AgenticRunner,
@@ -25,25 +28,23 @@ import {
     HaltReason,
     RecognizedIntent,
     IntentType,
+    TaskComplexity,
     ProcessedObservation,
     ObservationType,
     ExecutionPlan,
     AgentState,
 } from './primitives/AgentPrimitives';
 
-// Senior Companion Modules
-import { EmpathyEngine, EmotionCategory } from './persona/EmpathyEngine';
-import { WellbeingGuard, RiskSeverity } from './safety/WellbeingGuard';
-import { ProactiveEngine } from './proactive/ProactiveEngine';
+// Learning Pipeline Integration (100M Roadmap - Phase 1)
+import { SelfImprovementManager, ExecutionRecord, ExecutionOutcome } from './learning/SelfImprovement';
+import { MemoryType, MemoryImportance, AgentMemoryManager } from './memory/AgentMemory';
+import { PhaseHandlers } from './engine/PhaseHandlers';
+import { CompanionSystem } from './engine/CompanionSystem';
 import { SessionContinuityManager } from './continuity/SessionContinuity';
-import { CognitiveAdapter } from './cognitive/CognitiveAdapter';
-import { ExplanationEngine } from './transparency/ExplanationEngine';
-import { MemoryType, MemoryImportance } from './memory/AgentMemory';
-import { ModelRouter, ModelProfile, TaskComplexity } from './routing/ModelRouter';
-import { AgentConfig } from './registry/AgentRegistry';
-import { EmbeddingPort } from '../ports/EmbeddingPort';
-import { VectorStorePort } from '../ports/VectorStorePort';
-import { AgentMemoryManager } from './memory/AgentMemory';
+
+// Data Flywheel Integration (100M Roadmap - Phase 2)
+import { SignalCollectorPort } from '../ports/SignalCollectorPort';
+import { createInteractionSignal, InteractionSignal } from '../../domain/InteractionSignal';
 
 // ============================================================================
 // Types
@@ -159,15 +160,17 @@ export class EnhancedReActAgent implements AgenticRunner {
     private systemPrompt: string;
     private modelRouter: ModelRouter;
 
-    // Senior Companion Engines
-    private empathyEngine: EmpathyEngine;
-    private wellbeingGuard: WellbeingGuard;
-    private proactiveEngine: ProactiveEngine;
-    private sessionContinuity: SessionContinuityManager;
-    private cognitiveAdapter: CognitiveAdapter;
-    private explanationEngine: ExplanationEngine;
+    // Engine Modules (Decoupled Phase 1.1)
+    private phaseHandlers: PhaseHandlers;
+    private companionSystem: CompanionSystem;
+
     private memory: AgentMemoryManager;
     private tracer!: EnhancedAgentTracer;
+    // Learning Pipeline Integration (100M Roadmap - Phase 1)
+    private selfImprovementManager: SelfImprovementManager;
+    // Data Flywheel Integration (100M Roadmap - Phase 2)
+    private signalCollector?: SignalCollectorPort;
+    private sessionContinuity: SessionContinuityManager;
 
     constructor(
         llm: LLMPort,
@@ -177,7 +180,8 @@ export class EnhancedReActAgent implements AgenticRunner {
         vectorStore?: VectorStorePort,
         embeddingPort?: EmbeddingPort,
         promptRegistry?: PromptRegistry,
-        toolRegistry?: ToolRegistry // Injected dependency
+        toolRegistry?: ToolRegistry, // Injected dependency
+        signalCollector?: SignalCollectorPort // Data Flywheel (100M Roadmap)
     ) {
         this.llm = llm;
         this.modelRouter = modelRouter;
@@ -195,17 +199,26 @@ export class EnhancedReActAgent implements AgenticRunner {
             this.systemPrompt = this.getDefaultSystemPrompt();
         }
 
-        // Initialize companion engines
-        this.empathyEngine = new EmpathyEngine();
-        this.wellbeingGuard = new WellbeingGuard();
-        this.proactiveEngine = new ProactiveEngine();
-        this.sessionContinuity = new SessionContinuityManager(this.config.userId || 'default-user');
-        this.cognitiveAdapter = new CognitiveAdapter();
-        this.explanationEngine = new ExplanationEngine();
+        // Initialize Engine Modules (Decoupled Phase 1.1)
+        this.phaseHandlers = new PhaseHandlers(
+            this.llm,
+            this.modelRouter,
+            this.promptRegistry!,
+            this.tools,
+            this.toolRegistry,
+            this.config
+        );
+        this.companionSystem = new CompanionSystem(this.config.userId || 'default-user');
 
         // Initialize Memory and Tracing
         this.memory = new AgentMemoryManager(this.config.userId || 'system', vectorStore, embeddingPort);
         // Note: tracer is initialized in run() where goal/context are available
+
+        // Learning Pipeline Integration (100M Roadmap - Phase 1)
+        this.selfImprovementManager = new SelfImprovementManager();
+        // Data Flywheel Integration (100M Roadmap - Phase 2)
+        this.signalCollector = signalCollector;
+        this.sessionContinuity = new SessionContinuityManager(this.config.userId || 'system');
     }
 
     /**
@@ -309,35 +322,35 @@ Think step by step, use tools when needed, and provide final answers.`;
 
                 switch (currentState) {
                     case AgentPhase.RECOGNIZING_INTENT:
-                        await this.handleIntentRecognition(stateMachine, tracer, monitor, goal, context);
+                        await this.phaseHandlers.handleIntentRecognition(stateMachine, tracer, monitor, goal, context, this.companionSystem);
                         break;
 
                     case AgentPhase.DECOMPOSING_TASK:
-                        await this.handleTaskDecomposition(stateMachine, tracer, monitor, goal);
+                        await this.phaseHandlers.handleTaskDecomposition(stateMachine, tracer, monitor, goal);
                         break;
 
                     case AgentPhase.PLANNING:
-                        await this.handlePlanning(stateMachine, tracer, monitor, contextManager);
+                        await this.phaseHandlers.handlePlanning(stateMachine, tracer, monitor, contextManager);
                         break;
 
                     case AgentPhase.EXECUTING:
-                        await this.handleExecution(stateMachine, tracer, monitor, contextManager);
+                        await this.phaseHandlers.handleExecution(stateMachine, tracer, monitor, contextManager, this.systemPrompt);
                         break;
 
                     case AgentPhase.OBSERVING:
-                        await this.handleObservation(stateMachine, tracer, monitor);
+                        await this.phaseHandlers.handleObservation(stateMachine, tracer, monitor);
                         break;
 
                     case AgentPhase.REFLECTING:
-                        await this.handleReflection(stateMachine, tracer, monitor, goal);
+                        await this.phaseHandlers.handleReflection(stateMachine, tracer, monitor);
                         break;
 
                     case AgentPhase.SYNTHESIZING:
-                        await this.handleSynthesis(stateMachine, tracer, monitor, goal);
+                        await this.phaseHandlers.handleSynthesis(stateMachine, tracer, monitor, goal, this.companionSystem);
                         break;
 
                     case AgentPhase.REPLANNING:
-                        await this.handleReplanning(stateMachine, tracer, monitor);
+                        await this.phaseHandlers.handleReplanning(stateMachine, tracer, monitor);
                         break;
 
                     default:
@@ -394,6 +407,70 @@ Think step by step, use tools when needed, and provide final answers.`;
         });
         tracer.endSpan(stateMachine.getState() === AgentPhase.DONE ? 'OK' : 'ERROR');
 
+        // Learning Pipeline Integration (100M Roadmap - Phase 1): Record Execution for Preference Learning
+        const finalMetrics = monitor.getMetrics();
+        const executionRecord: ExecutionRecord = {
+            id: tracer.getTraceId(),
+            agentId: 'enhanced-react',
+            goal: goal,
+            outcome: smContext.haltReason === HaltReason.SUCCESS
+                ? ExecutionOutcome.SUCCESS
+                : smContext.haltReason === HaltReason.ERROR
+                    ? ExecutionOutcome.ERROR
+                    : smContext.haltReason === HaltReason.TIMEOUT
+                        ? ExecutionOutcome.TIMEOUT
+                        : ExecutionOutcome.FAILURE,
+            stepCount: smContext.steps.length,
+            tokenUsage: finalMetrics.totalTokens,
+            costCents: finalMetrics.costCents,
+            durationMs: finalMetrics.elapsedMs,
+            toolsUsed: smContext.steps.map(s => s.action).filter(Boolean) as string[],
+            errorPatterns: smContext.lastError ? [smContext.lastError.message] : [],
+            successPatterns: smContext.steps
+                .filter(s => s.observation && !s.observation.startsWith('Error'))
+                .map(s => s.action)
+                .filter(Boolean) as string[],
+            timestamp: Date.now(),
+            strategy: this.config.modelProfile,
+            contextFeatures: {
+                userId: context.userId,
+                sessionId: context.sessionId,
+            },
+        };
+        this.selfImprovementManager.recordExecution(executionRecord);
+        tracer.recordEvent('execution_recorded_for_learning', { executionId: executionRecord.id });
+
+        // Data Flywheel Integration (100M Roadmap - Phase 2): Emit InteractionSignal
+        if (this.signalCollector) {
+            try {
+                const signal = createInteractionSignal({
+                    userId: context.userId || 'anonymous',
+                    sessionId: context.sessionId || 'unknown',
+                    inputText: goal,
+                    detectedEmotion: 'neutral', // TODO: Wire from EmpathyEngine result
+                    emotionConfidence: 0.5,
+                    intentCategory: (smContext as any).recognizedIntent?.type || 'general',
+                    responseId: tracer.getTraceId(),
+                    responseLatencyMs: finalMetrics.elapsedMs,
+                    modelUsed: this.config.modelProfile,
+                    responsePreview: (smContext.finalAnswer || '').substring(0, 500),
+                    agentStepCount: smContext.steps.length,
+                    implicitFeedback: {
+                        sessionContinued: true, // Updated later via updateImplicitFeedback
+                        followUpQuestions: 0,
+                        topicChange: false,
+                        conversationEndedBy: 'ongoing',
+                        responseDelayMs: 0,
+                        nextMessageLength: 0,
+                    },
+                });
+                await this.signalCollector.recordSignal(signal);
+                tracer.recordEvent('interaction_signal_emitted', { signalId: signal.id });
+            } catch (e) {
+                console.warn('[EnhancedReActAgent] Failed to emit interaction signal:', e);
+            }
+        }
+
         return {
             finalAnswer: smContext.finalAnswer || "I couldn't complete your request.",
             steps: smContext.steps,
@@ -420,587 +497,7 @@ Think step by step, use tools when needed, and provide final answers.`;
     // State Handlers
     // ============================================================================
 
-    /**
-     * Handle intent recognition phase.
-     */
-    private async handleIntentRecognition(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor,
-        goal: string,
-        context: AgentContext
-    ): Promise<void> {
-        tracer.startSpan('intent_recognition');
-
-        // SENIOR COMPANION: Wellbeing & Empathy
-        if (this.config.enableCompanionFeatures) {
-            // 1. Empathy Analysis (First, as it feeds into Wellbeing)
-            const emotionState = this.empathyEngine.detectEmotion(goal);
-            sm.setIntermediateResult('userEmotion', emotionState);
-
-            // 2. Safety Check
-            const assessment = this.wellbeingGuard.assessWellbeing(goal, emotionState);
-            if (assessment.overallRisk === RiskSeverity.HIGH || assessment.overallRisk === RiskSeverity.CRITICAL) {
-                sm.setFinalAnswer(assessment.suggestedResponse);
-                await sm.transition('SIMPLE_INTENT'); // Fast-track to exit
-                tracer.logTransition(AgentPhase.RECOGNIZING_INTENT, AgentPhase.SYNTHESIZING, 'SAFETY_INTERVENTION');
-                tracer.endSpan('OK');
-                return;
-            }
-        }
-
-        // Check if we should skip for simple queries
-        if (this.config.skipIntentForSimple && goal.length < (this.config.simpleQueryThreshold || 50)) {
-            // Simple query - skip directly to synthesis
-            const simpleIntent: RecognizedIntent = {
-                primaryIntent: IntentType.GREETING,
-                confidence: 0.9,
-                entities: {},
-                requiresMemoryLookup: false,
-                requiresSafetyCheck: false,
-                reasoning: 'Simple query, proceeding directly to response',
-            };
-            sm.setIntermediateResult('intent', simpleIntent);
-            await sm.transition('SIMPLE_INTENT');
-            tracer.logTransition(AgentPhase.RECOGNIZING_INTENT, AgentPhase.SYNTHESIZING, 'SIMPLE_INTENT');
-            tracer.endSpan('OK');
-            return;
-        }
-
-        try {
-            // Use LLM for intent recognition with routing
-            const intentPrompt = this.promptRegistry!.render('intent-recognition', {
-                user_input: goal,
-                context: `
-- User ID: ${context.userId}
-- Session ID: ${context.sessionId}
-- Has memories: ${context.memories && context.memories.length > 0}
-`.trim()
-            });
-            const decision = await this.callLLMWithRouting(intentPrompt, TaskComplexity.CLASSIFICATION);
-
-            // RELIABILITY: Use robust parsing
-            const intent = JsonParser.parse<RecognizedIntent>(decision.result);
-
-            // Record usage
-            const tokenEstimate = Math.ceil(intentPrompt.length / 4) + 200;
-            monitor.recordStep({
-                stepId: `intent-${Date.now()}`,
-                stepName: 'intent_recognition',
-                inputTokens: tokenEstimate,
-                outputTokens: 200,
-                costCents: decision.decision.model.costPer1KInputTokens * (tokenEstimate / 1000) +
-                    decision.decision.model.costPer1KOutputTokens * (200 / 1000),
-                durationMs: 500,
-                model: decision.decision.modelId,
-            });
-            tracer.recordTokenUsage(tokenEstimate, 200, decision.decision.modelId);
-            tracer.recordCost(decision.decision.model.costPer1KInputTokens * (tokenEstimate / 1000), decision.decision.modelId);
-
-            sm.setIntermediateResult('intent', intent);
-
-            // Transition based on intent
-            if (intent.primaryIntent === IntentType.GREETING || intent.confidence < 0.3) {
-                await sm.transition('SIMPLE_INTENT');
-                tracer.logTransition(AgentPhase.RECOGNIZING_INTENT, AgentPhase.SYNTHESIZING, 'SIMPLE_INTENT');
-            } else {
-                await sm.transition('INTENT_RECOGNIZED');
-                tracer.logTransition(AgentPhase.RECOGNIZING_INTENT, AgentPhase.DECOMPOSING_TASK, 'INTENT_RECOGNIZED');
-            }
-
-            tracer.endSpan('OK');
-        } catch (error) {
-            console.error('[EnhancedReActAgent] Intent recognition failed:', error);
-            tracer.endSpan('ERROR', (error as Error).message);
-            await sm.transition('INTENT_ERROR');
-        }
-    }
-
-    /**
-     * Handle task decomposition phase.
-     */
-    private async handleTaskDecomposition(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor,
-        goal: string
-    ): Promise<void> {
-        tracer.startSpan('task_decomposition');
-
-        try {
-            // Attempt a simple decomposition for complex queries
-            if (goal.length > 200) {
-                const decompPrompt = `
-You are an expert planner. Break down the user's complex request into a list of high-level sub-goals.
-
-USER REQUEST: "${goal}"
-
-Output a JSON array of strings representing the sub-goals in order.
-Example: ["Retrieve memories about X", "Synthesize story", "Format as email"]
-`;
-                const decision = await this.callLLMWithRouting(decompPrompt, TaskComplexity.REASONING);
-                let subgoals: string[] = [];
-                try {
-                    // RELIABILITY: Use robust parsing
-                    subgoals = JsonParser.parse<string[]>(decision.result);
-                    sm.setIntermediateResult('subgoals', subgoals);
-                    tracer.recordEvent('task_decomposed', { count: subgoals.length });
-                } catch (e) {
-                    console.warn('Failed to parse decomposition, proceeding with monolithic goal.', e);
-                }
-            }
-
-            await sm.transition('TASK_DECOMPOSED');
-            tracer.logTransition(AgentPhase.DECOMPOSING_TASK, AgentPhase.PLANNING, 'TASK_DECOMPOSED');
-            tracer.endSpan('OK');
-        } catch (error) {
-            console.error('Task decomposition failed:', error);
-            // Non-fatal, just proceed to planning with original goal
-            await sm.transition('TASK_DECOMPOSED');
-            tracer.endSpan('ERROR', (error as Error).message);
-        }
-    }
-
-    /**
-     * Handle planning phase.
-     */
-    private async handlePlanning(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor,
-        contextManager: ContextBudgetManager
-    ): Promise<void> {
-        tracer.startSpan('planning');
-
-        const smContext = sm.getContext();
-        const optimizedContext = contextManager.optimize();
-
-        // Build tool descriptions
-        const toolDescriptions = this.tools
-            .map((t) => `${t.metadata.name}: ${t.metadata.description} (Schema: ${JSON.stringify(t.inputSchema)})`)
-            .join('\n');
-
-        // Create an implicit plan - the ReAct loop itself is the "plan"
-        const plan: ExecutionPlan = {
-            id: `plan-${Date.now()}`,
-            goal: smContext.goal,
-            steps: [{
-                id: 'react-loop',
-                order: 1,
-                action: 'REACT_LOOP',
-                input: { goal: smContext.goal },
-                expectedOutputType: 'string',
-                maxRetries: 3,
-                timeoutMs: this.config.timeoutMs,
-                onFailure: 'abort',
-            }],
-            maxRetries: 3,
-            timeoutMs: this.config.timeoutMs,
-            tokenBudget: this.config.tokenBudget,
-            costBudgetCents: this.config.costBudgetCents,
-        };
-
-        sm.setIntermediateResult('plan', plan);
-        sm.setIntermediateResult('toolDescriptions', toolDescriptions);
-        sm.setIntermediateResult('contextContent', optimizedContext.content);
-
-        await sm.transition('PLAN_READY');
-        tracer.logTransition(AgentPhase.PLANNING, AgentPhase.EXECUTING, 'PLAN_READY');
-        tracer.endSpan('OK');
-    }
-
-    /**
-     * Handle execution phase.
-     */
-    private async handleExecution(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor,
-        contextManager: ContextBudgetManager
-    ): Promise<void> {
-        tracer.startSpan('execute_step');
-
-        const smContext = sm.getContext();
-        const toolDescriptions = sm.getIntermediateResult<string>('toolDescriptions') || '';
-        const contextContent = sm.getIntermediateResult<string>('contextContent') || '';
-
-        // Check budget limits first
-        const budgetLimit = sm.checkBudgetLimits();
-        if (budgetLimit) {
-            sm.setHaltReason(budgetLimit);
-            await sm.transition('STEP_LIMIT');
-            tracer.endSpan('ERROR', `Budget limit: ${budgetLimit}`);
-            return;
-        }
-
-        // Build the ReAct prompt using registry
-        const prompt = this.promptRegistry!.render('task-react-execution', {
-            system_prompt: this.systemPrompt,
-            tools: toolDescriptions,
-            context: contextContent,
-            goal: smContext.goal,
-            past_steps: JSON.stringify(smContext.steps.slice(-5))
-        });
-
-        try {
-            const stepStart = Date.now();
-
-            // FINOPS: Pre-calculate budget cap
-            const remainingBudget = this.config.costBudgetCents - monitor.getMetrics().costCents;
-            // Conservative estimate: 1K input tokens = $0.0005, 1K output = $0.0015 (Gemini Flash approximate)
-            // If budget is low, cap tokens aggressively
-            let maxTokens = 8192;
-            if (remainingBudget < 1.0) maxTokens = 1000;
-            if (remainingBudget < 0.1) maxTokens = 200;
-
-            // USE ROUTER FOR EACH STEP
-            const decision = await this.callLLMWithRouting(prompt, TaskComplexity.REASONING);
-
-            // RELIABILITY: Use robust parsing
-            const stepResult = JsonParser.parse<{
-                thought: string;
-                action: string;
-                actionInput: unknown;
-            }>(decision.result);
-
-            const step: AgentStep = {
-                thought: stepResult.thought,
-                action: stepResult.action,
-                actionInput: stepResult.actionInput,
-            };
-
-            // Record metrics
-            const inputTokens = Math.ceil(prompt.length / 4);
-            const outputTokens = 200; // Estimated actuals
-            const duration = Date.now() - stepStart;
-            const costCents = decision.decision.model.costPer1KInputTokens * (inputTokens / 1000) +
-                decision.decision.model.costPer1KOutputTokens * (outputTokens / 1000);
-
-            monitor.recordStep({
-                stepId: `step-${smContext.steps.length}`,
-                stepName: step.action,
-                inputTokens,
-                outputTokens,
-                costCents,
-                durationMs: duration,
-                model: decision.decision.modelId,
-            });
-            tracer.recordTokenUsage(inputTokens, outputTokens, decision.decision.modelId);
-            tracer.recordCost(costCents, decision.decision.modelId);
-
-            // Bounded CoT: Truncate thought to save context in future steps
-            const originalThought = step.thought;
-            const maxThoughtLength = this.config.maxThoughtLength || 1000;
-            if (step.thought && step.thought.length > maxThoughtLength) {
-                step.thought = step.thought.substring(0, maxThoughtLength) + '... [Thought Truncated to Save Context]';
-            }
-
-            tracer.logStep({ ...step, thought: originalThought }); // Log original thought for debugging
-            sm.recordUsage(inputTokens + outputTokens, costCents);
-
-            // Check if this is a final answer
-            if (step.action === 'Final Answer') {
-                const finalAnswerText = typeof step.actionInput === 'string'
-                    ? step.actionInput
-                    : String(step.actionInput ?? '');
-                sm.setFinalAnswer(finalAnswerText);
-                sm.addStep(step);
-                sm.setIntermediateResult('currentStep', step);
-                await sm.transition('STEP_COMPLETE');
-                tracer.logTransition(AgentPhase.EXECUTING, AgentPhase.OBSERVING, 'STEP_COMPLETE');
-                tracer.endSpan('OK');
-                return;
-            }
-
-            // Execute the tool
-            try {
-                tracer.startSpan('tool_execution', { tool: step.action });
-                let observation: string;
-
-                // SECURITY: Use ToolRegistry if available
-                if (this.toolRegistry && this.toolRegistry.has(step.action)) {
-                    // Default permissions: allow all registered tools (they are whitelisted by registration)
-                    const defaultPermissions = new Map<string, import('./tools/ToolContracts').ToolPermission>();
-                    // All tools in registry are implicitly allowed - restricted tools should not be registered
-                    defaultPermissions.set(step.action, 'ALLOWED' as import('./tools/ToolContracts').ToolPermission);
-
-                    const toolResult = await this.toolRegistry.execute(step.action, step.actionInput, {
-                        userId: this.config.userId || 'system',
-                        sessionId: smContext.id || 'unknown',
-                        agentId: 'enhanced-react',
-                        requestId: tracer.getTraceId(),
-                        permissions: defaultPermissions,
-                        dryRun: false
-                    });
-
-                    if (toolResult.success) {
-                        observation = typeof toolResult.data === 'string'
-                            ? toolResult.data
-                            : JSON.stringify(toolResult.data);
-                    } else {
-                        throw new Error(toolResult.error?.message || 'Tool execution failed');
-                    }
-                } else {
-                    // Fallback to legacy array check
-                    const tool = this.tools.find((t) => t.metadata.id === step.action || t.metadata.name === step.action);
-                    if (tool) {
-                        const rawResult = await tool.execute(step.actionInput, {
-                            userId: this.config.userId || 'system',
-                            sessionId: smContext.id || 'unknown',
-                            agentId: 'enhanced-react',
-                            requestId: tracer.getTraceId(),
-                            permissions: new Map(),
-                            dryRun: false
-                        });
-                        observation = rawResult.success
-                            ? (typeof rawResult.data === 'string' ? rawResult.data : JSON.stringify(rawResult.data))
-                            : `Error: ${rawResult.error?.message}`;
-                    } else {
-                        observation = `Error: Tool ${step.action} not found.`;
-                    }
-                }
-
-                step.observation = observation;
-                tracer.recordEvent('tool_result', { success: true });
-                tracer.endSpan('OK');
-            } catch (toolError: unknown) {
-                step.observation = `Error: ${(toolError as Error).message}`;
-                tracer.endSpan('ERROR', (toolError as Error).message);
-            }
-
-            sm.addStep(step);
-            sm.setIntermediateResult('currentStep', step);
-            await sm.transition('STEP_COMPLETE');
-            tracer.logTransition(AgentPhase.EXECUTING, AgentPhase.OBSERVING, 'STEP_COMPLETE');
-            tracer.endSpan('OK');
-
-        } catch (error) {
-            console.error('[EnhancedReActAgent] Execution error:', error);
-            tracer.endSpan('ERROR', (error as Error).message);
-            sm.updateContext({ lastError: error as Error });
-            await sm.transition('STEP_ERROR');
-        }
-    }
-
-    /**
-     * Handle observation phase.
-     */
-    private async handleObservation(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor
-    ): Promise<void> {
-        tracer.startSpan('observation_processing');
-
-        const currentStep = sm.getIntermediateResult<AgentStep>('currentStep');
-
-        if (!currentStep) {
-            console.warn('[EnhancedReActAgent] No current step for observation');
-            await sm.transition('PLAN_COMPLETE');
-            tracer.endSpan('OK');
-            return;
-        }
-
-        // Check if this was a final answer
-        if (currentStep.action === 'Final Answer') {
-            await sm.transition('PLAN_COMPLETE');
-            tracer.logTransition(AgentPhase.OBSERVING, AgentPhase.REFLECTING, 'PLAN_COMPLETE');
-            tracer.endSpan('OK');
-            return;
-        }
-
-        // Check if observation indicates we need to replan
-        const observation = currentStep.observation || '';
-        if (observation.includes('Error:') && sm.getContext().replanCount < this.config.maxReplanAttempts) {
-            await sm.transition('OBSERVATION_INVALIDATES');
-            tracer.logTransition(AgentPhase.OBSERVING, AgentPhase.REPLANNING, 'OBSERVATION_INVALIDATES');
-            tracer.endSpan('OK');
-            return;
-        }
-
-        // Continue with more steps
-        await sm.transition('CONTINUE_PLAN');
-        tracer.logTransition(AgentPhase.OBSERVING, AgentPhase.EXECUTING, 'CONTINUE_PLAN');
-        tracer.endSpan('OK');
-    }
-
-    /**
-     * Handle reflection phase.
-     */
-    private async handleReflection(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor,
-        goal: string
-    ): Promise<void> {
-        tracer.startSpan('reflection');
-
-        const smContext = sm.getContext();
-
-        // Simple reflection - check if we have a final answer
-        if (smContext.finalAnswer) {
-            await sm.transition('REFLECTION_COMPLETE');
-            tracer.logTransition(AgentPhase.REFLECTING, AgentPhase.SYNTHESIZING, 'REFLECTION_COMPLETE');
-        } else {
-            // Need to continue or replan
-            if (smContext.replanCount < this.config.maxReplanAttempts) {
-                await sm.transition('REFLECTION_INSUFFICIENT');
-                tracer.logTransition(AgentPhase.REFLECTING, AgentPhase.REPLANNING, 'REFLECTION_INSUFFICIENT');
-            } else {
-                // Give up and synthesize what we have
-                await sm.transition('REFLECTION_COMPLETE');
-                tracer.logTransition(AgentPhase.REFLECTING, AgentPhase.SYNTHESIZING, 'REFLECTION_COMPLETE');
-            }
-        }
-
-        tracer.endSpan('OK');
-    }
-
-    /**
-     * Handle synthesis phase.
-     */
-    private async handleSynthesis(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor,
-        goal: string
-    ): Promise<void> {
-        tracer.startSpan('synthesis');
-
-        const smContext = sm.getContext();
-
-        // If we already have a final answer, we're done
-        if (smContext.finalAnswer) {
-            await sm.transition('ANSWER_READY');
-            tracer.logTransition(AgentPhase.SYNTHESIZING, AgentPhase.DONE, 'ANSWER_READY');
-            tracer.endSpan('OK');
-            return;
-        }
-
-
-
-        // Otherwise, synthesize from observations
-        const observations = smContext.steps
-            .filter((s) => s.observation)
-            .map((s) => s.observation!)
-            .join('\n');
-
-        let response = '';
-
-        if (!observations) {
-            // Simple response generation
-            try {
-                response = await this.llm.generateText(
-                    `${this.systemPrompt}\n\nUser says: "${goal}"\n\nProvide a helpful response.`
-                );
-                const synthesisPrompt = `
-    Based on the user's goal, provide a helpful response.
-    
-    GOAL: ${goal}
-    
-    Provide a clear, helpful response.
-    `;
-                const decision = await this.callLLMWithRouting(synthesisPrompt, TaskComplexity.SUMMARIZATION);
-                response = decision.result;
-            } catch (error) {
-                response = "I'm sorry, I couldn't process your request.";
-            }
-        } else {
-            // Synthesize from observations
-            try {
-                const synthesisPrompt = `
-    Based on the following observations, provide a final answer to the user's goal.
-    
-    GOAL: ${goal}
-    
-    OBSERVATIONS:
-    ${observations}
-    
-    Provide a clear, helpful response.
-    `;
-                const decision = await this.callLLMWithRouting(synthesisPrompt, TaskComplexity.SUMMARIZATION);
-                response = decision.result;
-            } catch (error) {
-                response = "I found some information but couldn't synthesize a complete response.";
-            }
-        }
-
-        // SENIOR COMPANION: Response Adaptation
-        if (this.config.enableCompanionFeatures && response) {
-            try {
-                // 1. Empathy Injection
-                const emotionState = sm.getIntermediateResult<any>('userEmotion');
-                if (emotionState) {
-                    response = this.empathyEngine.adaptResponse(response, emotionState);
-                }
-
-                // 2. Explainability
-                // Convert steps to sources (approximate)
-                const sources = smContext.steps
-                    .filter(s => s.observation)
-                    .map(s => ({
-                        type: 'EXTERNAL' as any,
-                        description: `Tool output from ${s.action}`,
-                        obtainedAt: Date.now(),
-                        reliability: 'high'
-                    }));
-
-                // Defaults for confidence
-                const explainable = this.explanationEngine.createExplainableResponse(
-                    response,
-                    sources as any[],
-                    'HIGH' as any
-                );
-
-                if (explainable.shouldOfferExplanation) {
-                    response += "\n\n" + explainable.explanations.map(e => e.text).join(' ');
-                }
-
-                // 3. Cognitive Adaptation
-                const adapted = this.cognitiveAdapter.adaptResponse(response);
-                response = adapted.text;
-
-                // 4. Session Continuity
-                this.sessionContinuity.trackTopicDiscussion(goal);
-
-            } catch (adaptError) {
-                logger.error('[EnhancedReActAgent] Adaptation failed', { error: adaptError });
-            }
-        }
-
-        sm.setFinalAnswer(response);
-
-        await sm.transition('ANSWER_READY');
-        tracer.logTransition(AgentPhase.SYNTHESIZING, AgentPhase.DONE, 'ANSWER_READY');
-        tracer.endSpan('OK');
-    }
-
-    /**
-     * Handle replanning phase.
-     */
-    private async handleReplanning(
-        sm: AgentStateMachine,
-        tracer: EnhancedAgentTracer,
-        monitor: AgentLoopMonitor
-    ): Promise<void> {
-        tracer.startSpan('replanning');
-
-        sm.recordReplan();
-        monitor.recordReplan();
-
-        const smContext = sm.getContext();
-
-        if (smContext.replanCount >= this.config.maxReplanAttempts) {
-            await sm.transition('REPLAN_LIMIT');
-            tracer.logTransition(AgentPhase.REPLANNING, AgentPhase.HALTED, 'REPLAN_LIMIT');
-            sm.setHaltReason(HaltReason.REPLAN_LIMIT);
-        } else {
-            await sm.transition('REPLAN_READY');
-            tracer.logTransition(AgentPhase.REPLANNING, AgentPhase.PLANNING, 'REPLAN_READY');
-        }
-
-        tracer.endSpan('OK');
-    }
+    // Phases are now handled by PhaseHandlers (Phase 1.1 Decoupling)
 
     // ============================================================================
     // Helper Methods

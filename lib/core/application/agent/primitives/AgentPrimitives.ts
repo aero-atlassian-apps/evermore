@@ -10,9 +10,26 @@
 
 import { AgentContext, AgentStep } from '../types';
 
-// ============================================================================
-// Intent Recognition
-// ============================================================================
+// ============================================
+// Primitives
+// ============================================
+
+/**
+ * Task complexity categories for intelligent routing.
+ */
+/**
+ * Task complexity categories for intelligent routing.
+ */
+export enum TaskComplexity {
+  CLASSIFICATION = 'CLASSIFICATION',
+  EXTRACTION = 'EXTRACTION',
+  REASONING = 'REASONING',
+  CREATIVE = 'CREATIVE',
+  SAFETY_CRITICAL = 'SAFETY_CRITICAL',
+  FORMATTING = 'FORMATTING',
+  SUMMARIZATION = 'SUMMARIZATION',
+  CODE = 'CODE',
+}
 
 /**
  * Recognized intent from user input.

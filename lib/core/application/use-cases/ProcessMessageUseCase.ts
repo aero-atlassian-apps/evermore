@@ -13,11 +13,14 @@ import { HallucinationDetector, GroundTruthSource } from '../safety/Hallucinatio
 import { validateEmail } from '../security/InputSanitization';
 import { logger } from '../Logger';
 import { AgentMemoryPort } from '../ports/AgentMemoryPort';
+import { SignalCollectorPort } from '../ports/SignalCollectorPort';
+import { SignalCollectorAdapter } from '@/lib/infrastructure/adapters/signals/SignalCollectorAdapter';
 import { z } from 'zod';
 import { Message } from '../../domain/value-objects/Message';
 
 export class ProcessMessageUseCase {
   private hallucinationDetector: HallucinationDetector;
+  private signalCollector: SignalCollectorPort;
 
   constructor(
     private sessionRepository: SessionRepository,
@@ -25,8 +28,12 @@ export class ProcessMessageUseCase {
     private llm: LLMPort,
     private vectorStore: VectorStorePort,
     private contentSafetyGuard: ContentSafetyGuard,
-    private memoryFactory: (userId: string) => AgentMemoryPort
+    private memoryFactory: (userId: string) => AgentMemoryPort,
+    signalCollector?: SignalCollectorPort
   ) {
+    // Data Flywheel (100M Roadmap): Initialize signal collector for autonomous learning
+    this.signalCollector = signalCollector || new SignalCollectorAdapter();
+
     // Initialize HallucinationDetector for response validation
     this.hallucinationDetector = new HallucinationDetector(llm, {
       flagThreshold: 0.7,
@@ -148,7 +155,8 @@ export class ProcessMessageUseCase {
         this.vectorStore,
         undefined,
         undefined,
-        toolRegistry // Now properly populated with registered tools
+        toolRegistry, // Now properly populated with registered tools
+        this.signalCollector // Data Flywheel (100M Roadmap)
       );
 
       const result = await agent.run(`User said: "${message}". Respond appropriately.`, context);

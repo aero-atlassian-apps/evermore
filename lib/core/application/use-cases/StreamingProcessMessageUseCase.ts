@@ -26,6 +26,8 @@ import { ModelRouter, ModelProfile, DEFAULT_MODELS } from '../agent/routing/Mode
 import { logger } from '../Logger';
 import { z } from 'zod';
 import { AgentMemoryPort } from '../ports/AgentMemoryPort';
+import { SignalCollectorPort } from '../ports/SignalCollectorPort';
+import { SignalCollectorAdapter } from '@/lib/infrastructure/adapters/signals/SignalCollectorAdapter';
 import { Message } from '../../domain/value-objects/Message';
 
 export interface StreamingCallbacks {
@@ -36,14 +38,20 @@ export interface StreamingCallbacks {
 }
 
 export class StreamingProcessMessageUseCase {
+    private signalCollector: SignalCollectorPort;
+
     constructor(
         private sessionRepository: SessionRepository,
         private userRepository: UserRepository,
         private llm: LLMPort,
         private vectorStore: VectorStorePort,
         private contentSafetyGuard: ContentSafetyGuard,
-        private memoryFactory: (userId: string) => AgentMemoryPort
-    ) { }
+        private memoryFactory: (userId: string) => AgentMemoryPort,
+        signalCollector?: SignalCollectorPort
+    ) {
+        // Data Flywheel (100M Roadmap): Initialize signal collector for autonomous learning
+        this.signalCollector = signalCollector || new SignalCollectorAdapter();
+    }
 
     async executeStreaming(
         sessionId: string,
@@ -177,7 +185,8 @@ export class StreamingProcessMessageUseCase {
                 this.vectorStore,
                 undefined,
                 undefined,
-                toolRegistry
+                toolRegistry,
+                this.signalCollector // Data Flywheel (100M Roadmap)
             );
 
             // State: Reasoning

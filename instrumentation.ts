@@ -1,5 +1,13 @@
 export async function register() {
     if (process.env.NEXT_RUNTIME === 'nodejs') {
+        // Initialize OpenTelemetry first for distributed tracing
+        try {
+            const { initializeOtel } = await import('./lib/core/observability/otel-config');
+            initializeOtel();
+        } catch (e) {
+            console.warn('[Instrumentation] OTEL initialization skipped:', e instanceof Error ? e.message : e);
+        }
+
         // Setup Google Cloud credentials before anything else
         // We import this dynamically to ensure 'fs', 'path', etc. are NOT loaded in Edge Runtime
         const { setupGoogleCredentials } = await import('./lib/setup-auth');
